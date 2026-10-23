@@ -11,10 +11,14 @@ input and sound by SDL2, music by libvorbis.
 
     -w, --window        run in a window (default: fullscreen)
     -s, --size WxH      window size (default: 1280x720)
+        --aspect W:H    shape of the picture area (default 2:1)
     -l, --loop          loop the demo
         --no-vsync      don't wait for vertical sync
 
-Esc quits, F11 toggles fullscreen. Without a file name, `theta.kx` next to the
+Esc quits, F11 toggles fullscreen. The demo is projected for a 2:1 picture;
+the original player assumed the monitor shape picked in its setup dialog, so
+800x600 shown in 4:3 (e.g. under Wine) gave a 5:3 picture, 20% taller:
+`--aspect 5:3` reproduces that look. Without a file name, `theta.kx` next to the
 executable is used. Fonts are taken from `fonts/` next to the executable
 (Windows names: `arial.ttf`, `webdings.ttf`), then from fontconfig.
 

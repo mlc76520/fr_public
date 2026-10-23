@@ -212,7 +212,10 @@ static void DetermineTargetViewport(sViewport &vp)
   sInt targetWidth = r.XSize();
   //sInt targetHeight = 3 * AspectRatioList[IntroTargetAspect][0] * r.YSize() / (4 * AspectRatioList[IntroTargetAspect][1]);
 #if sLINUX
-  sInt targetHeight = r.XSize() / 2;     // 2:1 picture, square pixels
+  // the picture is projected for 2:1; LinuxPictureAspect is the shape of the
+  // area it is shown in (2:1 by default, square pixels; --aspect changes it)
+  extern sF32 LinuxPictureAspect;
+  sInt targetHeight = sInt(r.XSize() / LinuxPictureAspect);
 #else
   sInt targetHeight = AspectRatioList[IntroTargetAspect][0] * r.YSize() / (2 * AspectRatioList[IntroTargetAspect][1]);
 #endif

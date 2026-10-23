@@ -196,6 +196,7 @@ static sChar LinuxCmdLine[2048];
 static sU32 LinuxConfigFlags = sSF_DIRECT3D|sSF_FULLSCREEN|sSF_WAITVSYNC;
 static sInt LinuxConfigX = 1280;
 static sInt LinuxConfigY = 720;
+sF32 LinuxPictureAspect = 2.0f;
 
 static void Usage(const char *exe)
 {
@@ -203,6 +204,8 @@ static void Usage(const char *exe)
     "usage: %s [options] [file.kx]\n"
     "  -w, --window        run in a window (default: fullscreen)\n"
     "  -s, --size WxH      window size (default: 1280x720)\n"
+    "      --aspect W:H    shape of the picture area (default 2:1; 5:3 looks like\n"
+    "                      the original 800x600 player under Wine)\n"
     "  -l, --loop          loop the demo\n"
     "      --no-vsync      don't wait for vertical sync\n"
     "  -h, --help          show this help\n"
@@ -225,6 +228,16 @@ static void ParseCommandLine(int argc,char **argv)
         Usage(argv[0]);
         exit(1);
       }
+    }
+    else if(!strcmp(a,"--aspect") && i+1<argc)
+    {
+      sInt aw,ah;
+      if(sscanf(argv[++i],"%d:%d",&aw,&ah)!=2 || aw<=0 || ah<=0)
+      {
+        Usage(argv[0]);
+        exit(1);
+      }
+      LinuxPictureAspect = (sF32) aw / ah;
     }
     else if(!strcmp(a,"-l") || !strcmp(a,"--loop"))
       IntroLoop = 1;
