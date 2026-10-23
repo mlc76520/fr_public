@@ -459,6 +459,26 @@ static sBool MessagePump()
 
 /****************************************************************************/
 
+// THETA_FPS=n: cap the frame rate (testing)
+static void LimitFrameRate()
+{
+  static sInt fps = -1;
+  static sU32 next;
+  if(fps<0)
+  {
+    const char *e = getenv("THETA_FPS");
+    fps = e ? atoi(e) : 0;
+  }
+  if(fps<=0)
+    return;
+
+  sU32 now = timeGetTime();
+  if(next && (sInt)(next-now)>0)
+    SDL_Delay(next-now);
+  now = timeGetTime();
+  next = ((sInt)(now-next) > 100 || !next) ? now+1000/fps : next+1000/fps;
+}
+
 void sSystem_::InitX()
 {
   sInt i;
@@ -563,6 +583,7 @@ void sSystem_::InitX()
       KeyIndex = 0;
 
       Render();
+      LimitFrameRate();
 
       PerfLast.TimeFiltered = (PerfLast.TimeFiltered*7+PerfLast.Time)/8;
       PerfLast.Line     = PerfThis.Line;
@@ -1327,4 +1348,75 @@ static void LinuxCaptureFrame(IDirect3DDevice9 *dev)
   }
   sRelease(sys);
   sRelease(bb);
+}
+
+// THETA_DUMPTEX=dir: write every generated texture (16 bit/channel source data) as PNG
+static void LinuxDumpTexture(sInt xs,sInt ys,const sU16 *data)
+{
+  static sInt count;
+  const char *dir = getenv("THETA_DUMPTEX");
+  if(!dir || !data)
+    return;
+
+  sU8 *rgba = new sU8[xs*ys*4];
+  for(sInt i=0;i<xs*ys;i++)
+  {
+    rgba[i*4+0] = data[i*4+2]>>7;          // words are B,G,R,A (0..0x7fff)
+    rgba[i*4+1] = data[i*4+1]>>7;
+    rgba[i*4+2] = data[i*4+0]>>7;
+    rgba[i*4+3] = data[i*4+3]>>7;
+  }
+  char name[1024];
+  snprintf(name,sizeof(name),"%s/tex_%03d_%dx%d.png",dir,count++,xs,ys);
+  stbi_write_png(name,xs,ys,4,rgba,xs*4);
+  delete[] rgba;
+}
+
+// THETA_DUMPSHADERS=dir: write every shader the engine creates (D3D9 bytecode)
+static void LinuxDumpShader(const sU32 *code,sInt len)
+{
+  static sInt count;
+  const char *dir = getenv("THETA_DUMPSHADERS");
+  if(!dir || !code)
+    return;
+
+  char name[1024];
+  snprintf(name,sizeof(name),"%s/%s_%03d.bin",dir,(code[0]>>16)==0xfffe ? "vs" : "ps",count++);
+  FILE *f = fopen(name,"wb");
+  if(f)
+  {
+    fwrite(code,4,len,f);
+    fclose(f);
+  }
+}
+
+// debug: save a texture (render target) to PNG
+void LinuxSaveTexturePNG(sInt handle,const char *name)
+{
+  IDirect3DTexture9 *tex = (IDirect3DTexture9 *) sSystem->Textures[handle].Tex;
+  IDirect3DSurface9 *surf = 0,*sys = 0;
+  D3DSURFACE_DESC desc;
+  D3DLOCKED_RECT lr;
+  if(!tex || FAILED(tex->GetSurfaceLevel(0,&surf)))
+    return;
+  surf->GetDesc(&desc);
+  if(SUCCEEDED(sSystem->DXDev->CreateOffscreenPlainSurface(desc.Width,desc.Height,desc.Format,D3DPOOL_SYSTEMMEM,&sys,0))
+    && SUCCEEDED(sSystem->DXDev->GetRenderTargetData(surf,sys))
+    && SUCCEEDED(sys->LockRect(&lr,0,D3DLOCK_READONLY)))
+  {
+    sU8 *rgb = new sU8[desc.Width*desc.Height*3];
+    for(sU32 y=0;y<desc.Height;y++)
+      for(sU32 x=0;x<desc.Width;x++)
+      {
+        const sU8 *s = (const sU8 *)lr.pBits + y*lr.Pitch + x*4;
+        sU8 *d = rgb + (y*desc.Width+x)*3;
+        d[0]=s[2]; d[1]=s[1]; d[2]=s[0];
+      }
+    sys->UnlockRect();
+    stbi_write_png(name,desc.Width,desc.Height,3,rgb,desc.Width*3);
+    delete[] rgb;
+    fprintf(stderr,"saved %s (%ux%u fmt %d)\n",name,desc.Width,desc.Height,desc.Format);
+  }
+  sRelease(sys);
+  sRelease(surf);
 }

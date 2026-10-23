@@ -3253,6 +3253,9 @@ sInt sSystem_::AddTexture(sInt xs,sInt ys,sInt formatParm,sU16 *data,sInt mipcou
 {
   sInt i;
   sHardTex *tex;
+#if sLINUX && !sINTRO
+  LinuxDumpTexture(xs,ys,data);
+#endif
 #if sUSE_SHADERS
   static D3DFORMAT formats[] = 
   {
@@ -3956,6 +3959,9 @@ sInt sSystem_::GetShader(const sU32 *bytecode)
     Shaders[i].Code = 0;
 
   Shaders[i].Shader = 0;
+#if sLINUX && !sINTRO
+  LinuxDumpShader(bytecode,len);
+#endif
   if(bytecode)
   {
     HRESULT hr;

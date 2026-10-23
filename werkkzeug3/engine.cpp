@@ -4491,7 +4491,12 @@ void Engine_::BuildPaintJobs()
       NeedCurrentRender[passIndex] = sTRUE;
     
     PaintJob *pjob = Mem.Alloc<PaintJob>();
-    pjob->SortKey = (passIndex << 24) | (effect->Usage << 16);
+    // same light slot as single-pass mesh jobs below, so effects (ENGU_OTHER)
+    // come after the light and post-light phases of their pass. With slot 0
+    // they were painted before ENGU_POSTLIGHT, whose "add dest alpha" quad
+    // then turned their alpha into white (theta's intro particles).
+    sInt lightId = (effect->Usage < ENGU_SHADOW) ? 0 : MAXLIGHT-1;
+    pjob->SortKey = (passIndex << 24) | (lightId << 20) | (effect->Usage << 16);
     pjob->JobId = -1;
     pjob->Light = 0;
     pjob->EffJob = job;

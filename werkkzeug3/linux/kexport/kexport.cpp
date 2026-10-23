@@ -39,10 +39,64 @@ void WerkkzeugApp::MusicLoad()                  {}
 /***                                                                      ***/
 /****************************************************************************/
 
+// --dump: every operator with inputs, links, strings and raw parameters (for debugging)
+static void DumpDoc(WerkDoc *doc,FILE *out)
+{
+  fprintf(out,"=== events (start/end in beats 16.16, bpm %g)\n",(double)doc->SoundBPM);
+  for(sInt i=0;i<doc->Events->GetCount();i++)
+  {
+    WerkEvent *ev = doc->Events->Get(i);
+    fprintf(out,"event %-20s line %2d start %8.3f end %8.3f select %d op '%s' %s\n",ev->Name,ev->Line,
+      ev->Event.Start/65536.0,ev->Event.End/65536.0,ev->Event.Select,ev->Op ? ev->Op->Name : "",ev->Disabled ? "(disabled)" : "");
+  }
+
+  for(sInt p=0;p<doc->Pages->GetCount();p++)
+  {
+    WerkPage *page = doc->Pages->Get(p);
+    fprintf(out,"=== page %s\n",page->Name);
+    for(sInt i=0;i<page->Orig->GetCount();i++)
+    {
+      WerkOp *op = page->Orig->Get(i);
+      fprintf(out,"%-14s %02x '%s' @%d,%d",op->Class ? op->Class->Name : "?",op->Op.Command,op->Name,op->PosX,op->PosY);
+      for(sInt j=0;j<op->GetInputCount();j++)
+      {
+        WerkOp *in = op->GetInput(j);
+        fprintf(out," in%d=%s(%s)",j,in ? in->Class->Name : "-",in ? in->Name : "");
+      }
+      for(sInt j=0;j<op->GetLinkMax();j++)
+        if(op->LinkName[j][0])
+          fprintf(out," link%d='%s'",j,op->LinkName[j]);
+      for(sInt j=0;j<op->Op.GetStringMax();j++)
+        if(op->Op.GetString(j) && op->Op.GetString(j)[0])
+          fprintf(out," str%d=\"%s\"",j,op->Op.GetString(j));
+      for(sInt j=0;j<op->AnimOps->GetCount();j++)
+      {
+        WerkOpAnim *oa = op->AnimOps->Get(j);
+        fprintf(out," [anim %s p%d",oa->Info ? oa->Info->Name : "?",oa->Parameter);
+        if(oa->UnionKind==AOU_NAME) fprintf(out," '%s'",oa->SplineName);
+        else if(oa->UnionKind==AOU_COLOR) fprintf(out," %08x",oa->ConstColor);
+        else if(oa->UnionKind) fprintf(out," %g %g %g %g",oa->ConstVector.x,oa->ConstVector.y,oa->ConstVector.z,oa->ConstVector.w);
+        fprintf(out,"]");
+      }
+      fprintf(out,"\n   ");
+      for(sInt j=0;j<op->Op.GetDataWords();j++)
+      {
+        sU32 v = *op->Op.GetEditPtrU(j);
+        sF32 f = *(sF32 *)&v;
+        if(v && (v&0x7f800000) && f>-1e6 && f<1e6 && (v>>24)!=0xff)
+          fprintf(out," %d:%g",j,f);
+        else
+          fprintf(out," %d:%08x",j,v);
+      }
+      fprintf(out,"\n");
+    }
+  }
+}
+
 static void Usage()
 {
   fprintf(stderr,
-    "usage: kexport [--song file] input.k output.kx\n"
+    "usage: kexport [--song file] [--dump ops.txt] [--disable-event name] input.k output.kx\n"
     "  --song file   music to embed (default: the song file named in the project,\n"
     "                looked up next to the project file)\n");
   exit(1);
@@ -76,7 +130,9 @@ static void FindSong(WerkDoc *doc,const sChar *project)
 
 int main(int argc,char **argv)
 {
-  const char *song = 0,*in = 0,*out = 0;
+  const char *song = 0,*in = 0,*out = 0,*dump = 0;
+  const char *disable[32];
+  sInt disableCount = 0;
   sU8 *file,*data,*start;
   sU32 *read;
   sInt size;
@@ -85,6 +141,10 @@ int main(int argc,char **argv)
   {
     if(!strcmp(argv[i],"--song") && i+1<argc)
       song = argv[++i];
+    else if(!strcmp(argv[i],"--dump") && i+1<argc)
+      dump = argv[++i];
+    else if(!strcmp(argv[i],"--disable-event") && i+1<argc && disableCount<32)
+      disable[disableCount++] = argv[++i];
     else if(argv[i][0]=='-')
       Usage();
     else if(!in)
@@ -133,6 +193,21 @@ int main(int argc,char **argv)
     return 1;
   }
   doc->Connect();
+
+  for(sInt i=0;i<doc->Events->GetCount();i++)
+    for(sInt j=0;j<disableCount;j++)
+      if(!strcmp(doc->Events->Get(i)->Name,disable[j]))
+        doc->Events->Get(i)->Disabled = 1;
+
+  if(dump)
+  {
+    FILE *df = fopen(dump,"w");
+    if(df)
+    {
+      DumpDoc(doc,df);
+      fclose(df);
+    }
+  }
 
   if(song)
     sCopyString(doc->SongName,song,sizeof(doc->SongName));

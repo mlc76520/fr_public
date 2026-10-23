@@ -15,7 +15,7 @@ class sMaterialDirect;
 /****************************************************************************/
 /****************************************************************************/
 
-#if !sPLAYER
+#if !sPLAYER || sLINUX                    // Linux player: theta needs the IPP rendertargets
 #define GENOVER_RTSIZES       4   // different sizes for rt's
 #else
 #define GENOVER_RTSIZES       0   // HACK HACK HACK für debris

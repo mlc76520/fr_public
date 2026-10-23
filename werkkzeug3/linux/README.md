@@ -52,5 +52,14 @@ table without its GUI (`kexport/`).
   "cubes" effects (need the Windows-only HLSL compiler), 3D text (GDI glyph
   outlines + GLU tessellator). theta uses none of them.
 
-Testing aid: `THETA_SHOTS=5,30,60 THETA_SHOTDIR=dir ./theta` writes PNG
-screenshots at the given music times (seconds).
+Engine fixes needed by theta (2004 content on the 2007 engine):
+`GENOVER_RTSIZES` (the image post-processing render targets, disabled in
+player builds as a "hack for debris") is enabled again, and effects (particles)
+are sorted after the light/post-light phases like other single-pass jobs.
+
+Testing aids (environment variables):
+`THETA_SHOTS=5,30,60 THETA_SHOTDIR=dir` writes PNG screenshots at the given
+music times (seconds), `THETA_FPS=n` caps the frame rate, `THETA_DUMPTEX=dir`
+and `THETA_DUMPSHADERS=dir` write the generated textures and shaders.
+`kexport --dump ops.txt` lists operators, parameters and timeline events,
+`--disable-event name` leaves an event out of the export.
