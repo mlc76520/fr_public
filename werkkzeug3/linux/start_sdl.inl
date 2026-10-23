@@ -54,7 +54,7 @@ static sU32 timeGetTime()
 }
 
 static void Sleep(sU32 ms)                { SDL_Delay(ms); }
-static void ExitProcess(sU32 code)        { SDL_Quit(); _exit(code); }
+static void ExitProcess(sU32 code)        { fprintf(stderr,"exit (ExitProcess) during loading or after a fatal error\n"); SDL_Quit(); _exit(code); }
 static void OutputDebugString(const sChar *s) { fputs(s,stderr); }
 
 static sInt MessageBox(void *,const sChar *text,const sChar *caption,sU32)
@@ -125,7 +125,7 @@ static BOOL ShowWindow(HWND,sInt)          { return TRUE; }
 static BOOL ClipCursor(const RECT *)       { return TRUE; }
 static sBool IsFullscreen();
 static sInt ShowCursor(BOOL show)          { SDL_ShowCursor(show && !IsFullscreen() ? SDL_ENABLE : SDL_DISABLE); return show ? 0 : -1; }
-static BOOL DestroyWindow(HWND)            { WQuit = sTRUE; return TRUE; }
+static BOOL DestroyWindow(HWND)            { fprintf(stderr,"exit at %.1fs of music\n",sSystem->GetCurrentSample()/44100.0f); WQuit = sTRUE; return TRUE; }
 static BOOL SetWindowText(HWND win,const sChar *text) { SDL_SetWindowTitle((SDL_Window *) win,text); return TRUE; }
 static BOOL IsIconic(HWND win)             { return (SDL_GetWindowFlags((SDL_Window *) win) & SDL_WINDOW_MINIMIZED) != 0; }
 static BOOL IsZoomed(HWND win)             { return (SDL_GetWindowFlags((SDL_Window *) win) & SDL_WINDOW_MAXIMIZED) != 0; }
@@ -348,6 +348,7 @@ static void HandleEvent(const SDL_Event &ev)
   switch(ev.type)
   {
   case SDL_QUIT:
+    fprintf(stderr,"SDL_QUIT received\n");
     PushKey(sKEY_CLOSE);
     break;
 
@@ -380,6 +381,7 @@ static void HandleEvent(const SDL_Event &ev)
       sys->WFocus = 0;
       break;
     case SDL_WINDOWEVENT_CLOSE:
+      fprintf(stderr,"window closed\n");
       PushKey(sKEY_CLOSE);
       break;
     }
@@ -399,6 +401,8 @@ static void HandleEvent(const SDL_Event &ev)
       if(ev.key.keysym.sym==SDLK_PAUSE)  KeyPressedSinceQuery[VK_PAUSE] = 1;
     }
     key = TranslateKey(ev.key.keysym);
+    if(getenv("THETA_DEBUG"))
+      fprintf(stderr,"key %s %s\n",SDL_GetKeyName(ev.key.keysym.sym),ev.type==SDL_KEYDOWN ? "down" : "up");
     if(key)
       PushKey(ev.type==SDL_KEYDOWN ? key : key|sKEYQ_BREAK);
     break;

@@ -282,7 +282,7 @@ sBool sAppHandler(sInt code,sDInt value)
     break;
 
   case sAPPCODE_INIT:
-#if !sCONFIGDIALOG
+#if !sCONFIGDIALOG && !sLINUX             // Linux: keep what sAPPCODE_CONFIG loaded (with the <exe>.kx fallback)
 #if !LINKEDIN
     data = PtrTable[0];
     if(((sInt)data)==0x54525450)
