@@ -11,6 +11,10 @@
 /****************************************************************************/
 /****************************************************************************/
 
+#if sLINUX
+#include <ogg/ogg.h>
+#include <vorbis/codec.h>
+#else
 #ifdef _DEBUG
 #pragma comment(lib,sLIBPATH"_ogg1d.lib")
 #pragma comment(lib,sLIBPATH"_ogg2d.lib")
@@ -446,6 +450,7 @@ extern long     __cdecl vorbis_packet_blocksize(vorbis_info *vi,ogg_packet *op);
 #endif /* __cplusplus */
 
 #endif
+#endif // !sLINUX
 
 
 /****************************************************************************/

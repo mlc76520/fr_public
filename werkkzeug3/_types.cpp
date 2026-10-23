@@ -44,7 +44,7 @@ sU32 sGetRnd()
 {
   sU32 i;
 
-#if sMOBILE
+#if sMOBILE || sLINUX
   sU32 eax,ebx;
   eax = sRandomSeed;
   eax = eax*0x343fd+0x269ec3;
@@ -623,7 +623,7 @@ sInt sICosOld(sInt w)
 
 void sCopyMemFast(void *d,const void *s,sInt c)
 {
-#if !sINTRO && !sMOBILE
+#if !sINTRO && !sMOBILE && !sLINUX
   if(sSystem->CpuMask & sCPU_MMX2)
   {
     __asm
@@ -2260,6 +2260,9 @@ sU32 sRandom::Int32()
 
 static sInt CutRange(sU32 value,sInt max)
 {
+#if sLINUX
+  return (sInt)((sU64(value)*sU32(max))>>32);
+#else
   sInt x;
 
   __asm
@@ -2268,6 +2271,7 @@ static sInt CutRange(sU32 value,sInt max)
     mul   [max];
     mov   [x], edx;
   }
+#endif
 }
 
 sInt sRandom::Int(sInt max)
@@ -2607,6 +2611,16 @@ ALIGN4_INIT1(sF32 SIMD_SP_sin_c0,-1.854219680e-4f);
 ALIGN4_INIT1(sF32 SIMD_SP_sin_c1, 8.314273770e-3f);
 ALIGN4_INIT1(sF32 SIMD_SP_sin_c2,-1.666585317e-1f);
 
+#if sLINUX
+void SSE_SinCos4(sF32 a[4],sF32 s[4],sF32 c[4])
+{
+  for(sInt i=0;i<4;i++)
+  {
+    s[i] = __builtin_sinf(a[i]);
+    c[i] = __builtin_cosf(a[i]);
+  }
+}
+#else
 void SSE_SinCos4(sF32 a[4],sF32 s[4],sF32 c[4])
 {
   __asm
@@ -2687,6 +2701,7 @@ void SSE_SinCos4(sF32 a[4],sF32 s[4],sF32 c[4])
     movaps    [edi], xmm7;
   }
 }
+#endif
 
 //#if !sINTRO
 void sMatrix::InitEuler(sF32 _a,sF32 _b,sF32 _c)

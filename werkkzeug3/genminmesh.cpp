@@ -2490,6 +2490,10 @@ GenMinMesh * __stdcall MinMesh_Perlin(GenMinMesh *mesh,sInt mask,sFSRT srt,sF323
 
   // setup fpu: single precision, round towards neg. infinity
 
+#if sLINUX
+  oldcw = sGetFPUControl();
+  sSetFPUControl(0x143f);
+#else
   __asm
   {
     fstcw   [oldcw];
@@ -2497,6 +2501,7 @@ GenMinMesh * __stdcall MinMesh_Perlin(GenMinMesh *mesh,sInt mask,sFSRT srt,sF323
     fldcw   [esp];
     pop     eax;
   }
+#endif
 
 	for(sInt i=0;i<mesh->Vertices.Count;i++)
 	{
@@ -2547,10 +2552,14 @@ GenMinMesh * __stdcall MinMesh_Perlin(GenMinMesh *mesh,sInt mask,sFSRT srt,sF323
 	}
 
   // restore fpu state
+#if sLINUX
+  sSetFPUControl(oldcw);
+#else
   __asm
   {
     fldcw   [oldcw];
   }
+#endif
 
   mesh->ChangeGeo();
   return mesh;
@@ -4845,6 +4854,14 @@ static void __stdcall font3DEdgeFlagCB(sBool flag,GenMinMesh *mesh)
 {
 }
 
+#if sLINUX
+// Glyph outlines came from GDI and were tesselated with GLU: not available yet.
+GenMinMesh * __stdcall MinMesh_Font3D(sF32 height,sF32 extrude,sF32 maxErr,sChar *text,sChar *font)
+{
+  sDPrintF("warning: Font3D (\"%s\") is not implemented on Linux\n",text);
+  return new GenMinMesh;
+}
+#else
 GenMinMesh * __stdcall MinMesh_Font3D(sF32 height,sF32 extrude,sF32 maxErr,sChar *text,sChar *font)
 {
   height = sMax(height,8/128.0f);
@@ -5081,6 +5098,7 @@ GenMinMesh * __stdcall MinMesh_Font3D(sF32 height,sF32 extrude,sF32 maxErr,sChar
 
   return mesh;
 }
+#endif
 
 /****************************************************************************/
 /****************************************************************************/

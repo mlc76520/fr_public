@@ -927,6 +927,42 @@ static void FullBoneInner(sVertexTSpace3Big *out,const sVertexTSpace3Big *in,Eng
   }
 }
 
+#if sLINUX
+
+// C versions of the SSE skinning loops below
+static void RigidInnerSSE_asm(sVertexTSpace3Big *out,const sVertexTSpace3Big *in,sU16 *matrixInds,sMatrix *matrices,sInt vc)
+{
+  for(sInt i=0;i<vc;i++)
+  {
+    const sMatrix *m = matrices + matrixInds[i];
+
+    out->x = m->i.x * in->x + m->j.x * in->y + m->k.x * in->z + m->l.x;
+    out->y = m->i.y * in->x + m->j.y * in->y + m->k.y * in->z + m->l.y;
+    out->z = m->i.z * in->x + m->j.z * in->y + m->k.z * in->z + m->l.z;
+
+    out->nx = m->i.x * in->nx + m->j.x * in->ny + m->k.x * in->nz;
+    out->ny = m->i.y * in->nx + m->j.y * in->ny + m->k.y * in->nz;
+    out->nz = m->i.z * in->nx + m->j.z * in->ny + m->k.z * in->nz;
+
+    out->sx = m->i.x * in->sx + m->j.x * in->sy + m->k.x * in->sz;
+    out->sy = m->i.y * in->sx + m->j.y * in->sy + m->k.y * in->sz;
+    out->sz = m->i.z * in->sx + m->j.z * in->sy + m->k.z * in->sz;
+
+    out->c = in->c;
+    out->u = in->u;
+    out->v = in->v;
+
+    out++;
+    in++;
+  }
+}
+
+static void FullBoneInnerSSE_asm(sVertexTSpace3Big *out,const sVertexTSpace3Big *in,EngMesh::BoneInfo *inInfo,sMatrix *matrices,sInt vc)
+{
+  FullBoneInner(out,in,inInfo,matrices,vc);
+}
+
+#else
 static void RigidInnerSSE_asm(sVertexTSpace3Big *outp,const sVertexTSpace3Big *inp,sU16 *matrixInds,sMatrix *matrices,sInt vc)
 {
   static const sU32 __declspec(align(16)) mask[4] = { ~0,~0,~0,0 };
@@ -1150,6 +1186,7 @@ matsdone:
 }
 
 #pragma warning (pop)
+#endif
 
 // Do the bone transforms
 void *EngMesh::EvalBones(sMatrix *matrices,sGrowableMemStack &alloc)
@@ -1268,7 +1305,7 @@ static void VertCopyInner(sVertexTSpace3Big *vp,const sVertexTSpace3Big *vert,sI
 {
   sZONE(VertCopy);
 
-#if !sINTRO
+#if !sINTRO && !sLINUX
   __asm
   {
     mov     edi, [vp];
@@ -1368,7 +1405,7 @@ static void VertCopyStencilInner(sVertexXYZW *vp,const sVertexTSpace3Big *vert,s
 
   sZONE(VCopyStencil);
 
-#if !sINTRO
+#if !sINTRO && !sLINUX
   __asm
   {
     movq    mm6, [ormask];

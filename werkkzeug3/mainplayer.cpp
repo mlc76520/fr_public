@@ -119,6 +119,7 @@ static void RenderSoundEffects(KDoc *doc,sU8 *data)
 
 /****************************************************************************/
 
+#if !sLINUX // V2 synth (assembler) is not part of the Linux build
 void IntroSoundHandler(sS16 *stream,sInt left,void *user)
 {
   static sF32 buffer[4096*2];
@@ -157,6 +158,8 @@ void IntroSoundHandler(sS16 *stream,sInt left,void *user)
     SoundTimer = 0;
   }
 }
+
+#endif
 
 static void MusicPlayerHandler(sS16 *buffer,sInt samples,void *user)
 {
@@ -208,7 +211,11 @@ static void DetermineTargetViewport(sViewport &vp)
 
   sInt targetWidth = r.XSize();
   //sInt targetHeight = 3 * AspectRatioList[IntroTargetAspect][0] * r.YSize() / (4 * AspectRatioList[IntroTargetAspect][1]);
+#if sLINUX
+  sInt targetHeight = r.XSize() / 2;     // 2:1 picture, square pixels
+#else
   sInt targetHeight = AspectRatioList[IntroTargetAspect][0] * r.YSize() / (2 * AspectRatioList[IntroTargetAspect][1]);
+#endif
 
   if(targetHeight > r.YSize())
   {

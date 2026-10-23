@@ -6,6 +6,9 @@
 #include "_types.hpp"
 #include "fried.hpp"
 #include "fried_internal.hpp"
+#if sLINUX
+#include "fried_mmx_linux.hpp"
+#endif
 
 #include <crtdbg.h>
 
@@ -42,6 +45,40 @@ namespace FRIED
     // TODO: write the corresponding row using the correct innerloop
   }
 
+#if sLINUX
+  #define MM_LOAD4(reg0,reg1,reg2,reg3,offset) \
+    reg0 = mmLoad((const sU8 *) c0 + (offset)); \
+    reg1 = mmLoad((const sU8 *) c1 + (offset)); \
+    reg2 = mmLoad((const sU8 *) c2 + (offset)); \
+    reg3 = mmLoad((const sU8 *) c3 + (offset));
+
+  #define MM_STORE4(reg0,reg1,reg2,reg3,rc0,rc1,rc2,rc3) \
+    mmStore(dest[(rc0)>>4] + xOffs + ((rc0)&0xf),reg0); \
+    mmStore(dest[(rc1)>>4] + xOffs + ((rc1)&0xf),reg1); \
+    mmStore(dest[(rc2)>>4] + xOffs + ((rc2)&0xf),reg2); \
+    mmStore(dest[(rc3)>>4] + xOffs + ((rc3)&0xf),reg3);
+
+  static __forceinline void shuffle4x16(sS16 **dest,sInt xOffs,sS16 *c0,sS16 *c1,sS16 *c2,sS16 *c3)
+  {
+    __m64 mm0,mm1,mm2,mm3,mm4,mm5,mm6,mm7;
+
+    MM_LOAD4(mm0,mm1,mm2,mm3,0);
+    MMI_TRANSPOSE(mm0,mm1,mm2,mm3,mm4,mm5);
+    MM_LOAD4(mm2,mm5,mm6,mm7,8);
+    MM_STORE4(mm0,mm1,mm4,mm3,0x00,0x04,0x44,0x40);
+    MMI_TRANSPOSE(mm2,mm5,mm6,mm7,mm0,mm1);
+    MM_LOAD4(mm1,mm3,mm4,mm6,16);
+    MM_STORE4(mm2,mm5,mm0,mm7,0x80,0xc0,0xc4,0x84);
+    MMI_TRANSPOSE(mm1,mm3,mm4,mm6,mm2,mm5);
+    MM_LOAD4(mm0,mm4,mm5,mm7,24);
+    MM_STORE4(mm1,mm3,mm2,mm6,0x88,0xc8,0xcc,0x8c);
+    MMI_TRANSPOSE(mm0,mm4,mm5,mm7,mm1,mm3);
+    MM_STORE4(mm0,mm4,mm1,mm7,0x4c,0x48,0x08,0x0c);
+
+    _mm_empty();
+  }
+
+#else
   #define MM_LOAD4(reg0,reg1,reg2,reg3,offset) \
     __asm mov       eax, [c0] \
     __asm mov       ebx, [c1] \
@@ -100,6 +137,8 @@ namespace FRIED
 
     __asm emms;
   }
+
+#endif
 
   static void inv_reorder(sS16 **dest,sInt xOffs,sS16 *src,sInt cwidth)
   {

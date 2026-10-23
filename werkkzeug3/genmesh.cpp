@@ -2722,6 +2722,10 @@ void GenMesh::Perlin(const sMatrix &mat,const sVector &amp)
   sInt oldcw;
 
   // setup fpu: single precision, round towards neg. infinity
+#if sLINUX
+  oldcw = sGetFPUControl();
+  sSetFPUControl(0x143f);
+#else
   __asm
   {
     fstcw   [oldcw];
@@ -2729,6 +2733,7 @@ void GenMesh::Perlin(const sMatrix &mat,const sVector &amp)
     fldcw   [esp];
     pop     eax;
   }
+#endif
 
 	for(sInt i=0;i<Vert.Count;i++)
 	{
@@ -2775,10 +2780,14 @@ void GenMesh::Perlin(const sMatrix &mat,const sVector &amp)
 	}
 
   // restore fpu state
+#if sLINUX
+  sSetFPUControl(oldcw);
+#else
   __asm
   {
     fldcw   [oldcw];
   }
+#endif
 }
 
 /****************************************************************************/

@@ -5,6 +5,9 @@
 
 #include "_types.hpp"
 #include "fried_internal.hpp"
+#if sLINUX
+#include "fried_mmx_linux.hpp"
+#endif
 
 namespace FRIED
 {
@@ -159,7 +162,65 @@ namespace FRIED
   // FIXME: no output shifting as of yet
   void indct42D(sS16 *x0,sS16 *x1,sS16 *x2,sS16 *x3)
   {
-  #if 1
+  #if sLINUX
+    __m64 mm0,mm1,mm2,mm3,mm4,mm5,mm6;
+
+    // load (ok, this is going to be somewhat confusing)
+    mm0 = mmLoad(x0); // mm0=a
+    mm1 = mmLoad(x2); // mm1=c
+    mm2 = mmLoad(x3); // mm2=d
+    mm3 = mmLoad(x1); // mm3=b
+
+    // vertical pass
+    mm4 = _mm_srai_pi16(mm2,1);
+    mm5 = _mm_srai_pi16(mm2,3);
+    mm3 = _mm_sub_pi16(mm3,mm4);
+    mm3 = _mm_add_pi16(mm3,mm5);
+    mm0 = _mm_sub_pi16(mm0,mm1);
+    mm6 = _mm_setzero_si64();
+    mm4 = _mm_srai_pi16(mm3,1);
+    mm5 = _mm_srai_pi16(mm3,3);
+    mm3 = _mm_add_pi16(mm3,mm0);
+    mm6 = _mm_sub_pi16(mm6,mm0);
+    mm2 = _mm_add_pi16(mm2,mm4);
+    mm3 = _mm_srai_pi16(mm3,1);
+    mm2 = _mm_sub_pi16(mm2,mm5);
+    mm0 = _mm_sub_pi16(mm0,mm3);
+    mm6 = _mm_add_pi16(mm6,mm2);
+    mm6 = _mm_srai_pi16(mm6,1);
+    mm1 = _mm_sub_pi16(mm1,mm6);
+    mm2 = _mm_add_pi16(mm2,mm1);
+
+    // transpose (afterwards value from mm4 now in mm2)
+    MMI_TRANSPOSE(mm0,mm1,mm2,mm3,mm4,mm5);
+
+    // horizontal pass
+    mm2 = _mm_srai_pi16(mm3,1);
+    mm5 = _mm_srai_pi16(mm3,3);
+    mm1 = _mm_sub_pi16(mm1,mm2);
+    mm1 = _mm_add_pi16(mm1,mm5);
+    mm0 = _mm_sub_pi16(mm0,mm4);
+    mm6 = _mm_setzero_si64();
+    mm2 = _mm_srai_pi16(mm1,1);
+    mm5 = _mm_srai_pi16(mm1,3);
+    mm1 = _mm_add_pi16(mm1,mm0);
+    mm6 = _mm_sub_pi16(mm6,mm0);
+    mm3 = _mm_add_pi16(mm3,mm2);
+    mm1 = _mm_srai_pi16(mm1,1);
+    mm3 = _mm_sub_pi16(mm3,mm5);
+    mm0 = _mm_sub_pi16(mm0,mm1);
+    mm6 = _mm_add_pi16(mm6,mm3);
+    mm6 = _mm_srai_pi16(mm6,1);
+    mm4 = _mm_sub_pi16(mm4,mm6);
+    mm3 = _mm_add_pi16(mm3,mm4);
+
+    mmStore(x0,mm0);
+    mmStore(x1,mm4);
+    mmStore(x2,mm3);
+    mmStore(x3,mm1);
+
+    _mm_empty();
+  #elif 1
     __asm
     {
       mov       eax, [x0];
@@ -448,7 +509,77 @@ namespace FRIED
 
   void lbt4post4x4(sS16 *x0,sS16 *x1,sS16 *x2,sS16 *x3)
   {
-#if 1
+#if sLINUX
+    __m64 mm0,mm1,mm2,mm3,mm4,mm5;
+
+    mm0 = mmLoad(x0);
+    mm1 = mmLoad(x1);
+    mm2 = mmLoad(x2);
+    mm3 = mmLoad(x3);
+
+    // vertical lbt postfilter stage 1
+    mm3 = _mm_sub_pi16(mm3,mm0);
+    mm2 = _mm_sub_pi16(mm2,mm1);
+    mm4 = mm2;
+    mm0 = _mm_add_pi16(mm0,mm0);
+    mm1 = _mm_add_pi16(mm1,mm1);
+    mm0 = _mm_add_pi16(mm0,mm3);
+    mm1 = _mm_add_pi16(mm1,mm2);
+    mm4 = _mm_srai_pi16(mm4,1);
+
+    // vertical lbt postfilter stage 2
+    mm2 = _mm_add_pi16(mm2,mm2);
+    mm3 = _mm_sub_pi16(mm3,mm4);
+    mm2 = _mm_sub_pi16(mm2,mm3);
+    mm2 = _mm_srai_pi16(mm2,2);
+    mm3 = _mm_add_pi16(mm3,mm2);
+
+    // vertical lbt postfilter stage 3
+    mm0 = _mm_sub_pi16(mm0,mm3);
+    mm1 = _mm_sub_pi16(mm1,mm2);
+    mm2 = _mm_add_pi16(mm2,mm2);
+    mm3 = _mm_add_pi16(mm3,mm3);
+    mm2 = _mm_add_pi16(mm2,mm1);
+    mm3 = _mm_add_pi16(mm3,mm0);
+
+    // transpose (afterwards value from mm4 now in mm2)
+    MMI_TRANSPOSE(mm0,mm1,mm2,mm3,mm4,mm5);
+
+    // horizontal lbt postfilter stage 1
+    mm3 = _mm_sub_pi16(mm3,mm0);
+    mm4 = _mm_sub_pi16(mm4,mm1);
+    mm2 = mm4;
+    mm0 = _mm_add_pi16(mm0,mm0);
+    mm1 = _mm_add_pi16(mm1,mm1);
+    mm2 = _mm_srai_pi16(mm2,1);
+    mm0 = _mm_add_pi16(mm0,mm3);
+    mm1 = _mm_add_pi16(mm1,mm4);
+
+    // horizontal lbt postfilter stage 2
+    mm4 = _mm_add_pi16(mm4,mm4);
+    mm3 = _mm_sub_pi16(mm3,mm2);
+    mm4 = _mm_sub_pi16(mm4,mm3);
+    mm4 = _mm_srai_pi16(mm4,2);
+    mm3 = _mm_add_pi16(mm3,mm4);
+
+    // horizontal lbt postfilter stage 3
+    mm1 = _mm_sub_pi16(mm1,mm4);
+    mm0 = _mm_sub_pi16(mm0,mm3);
+    mm4 = _mm_add_pi16(mm4,mm4);
+    mm3 = _mm_add_pi16(mm3,mm3);
+    mm4 = _mm_add_pi16(mm4,mm1);
+    mm3 = _mm_add_pi16(mm3,mm0);
+
+    // transpose
+    MMI_TRANSPOSE(mm0,mm1,mm4,mm3,mm2,mm5);
+
+    mmStore(x0,mm0);
+    mmStore(x1,mm1);
+    mmStore(x2,mm2);
+    mmStore(x3,mm3);
+
+    _mm_empty();
+#elif 1
     __asm
     {
       mov       eax, [x0];

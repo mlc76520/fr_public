@@ -32,6 +32,12 @@ const sChar *sWindowTitle="fr-052: platinum";
 #define D3D_DEBUG_INFO
 #define INITGUID // to get rid of dxguid.lib
 
+#if sLINUX
+#include <SDL.h>
+#include <windows.h>                  // DXVK-native's minimal windows.h
+#include <d3d9.h>
+#include <malloc.h>
+#else
 #include <windows.h>
 #include <d3d9.h>
 #include <dinput.h>
@@ -40,6 +46,7 @@ const sChar *sWindowTitle="fr-052: platinum";
 #include <crtdbg.h>
 #include <malloc.h>
 #include <float.h>
+#endif
 
 #define WINZERO(x) {sSetMem(&x,0,sizeof(x));}
 #define WINSET(x) {sSetMem(&x,0,sizeof(x));x.dwSize = sizeof(x);}
@@ -97,6 +104,9 @@ sMAKEZONE(Sound3D,"Sound3D",0xff804040);
 
 class sBroker_ *sBroker;
 
+#if sLINUX
+static SDL_Window *SDLWindow;
+#else
 HMODULE d3dlib; 
 HMODULE dilib;
 HMODULE dslib;
@@ -110,9 +120,12 @@ Direct3DCreate9T Direct3DCreate9P;
 DirectSoundCreate8T DirectSoundCreate8P;
 
 HINSTANCE WInst;
+#endif
 sChar *WCmdLine;
 sChar WFilename[2048];
+#if !sLINUX
 HWND MsgWin;
+#endif
 static sBool SingleCore;
 
 sSystem_ *sSystem;
@@ -151,6 +164,8 @@ static sInt MultiSampleQuality = 0;
 /****************************************************************************/
 
 sInt WShow;
+#if sLINUX
+#else
 HDC GDIScreenDC;
 HDC GDIDC;
 HBITMAP GDIHBM;
@@ -160,6 +175,7 @@ HFONT FontHandle;
 
 sBool InitGDI();
 void ExitGDI();
+#endif
 
 /****************************************************************************/
 /*
@@ -275,9 +291,12 @@ static FVFTableStruct FVFTable[] =
 
 #if sUSE_DIRECTSOUND
 
+#if sLINUX
+#else
 static IDirectSound8  *DXS;
 static IDirectSoundBuffer8 *DXSBuffer;
 static IDirectSoundBuffer *DXSPrimary;
+#endif
 static volatile sSoundHandler DXSHandler;
 static sInt DXSHandlerAlign;
 static sInt DXSHandlerSample;
@@ -296,6 +315,10 @@ static volatile sInt DXSReadOffset;
 static volatile sInt DXSTime;
 static volatile sInt DXSIndex;
 
+#if sLINUX
+static SDL_AudioDeviceID DXSDevice;
+static volatile sInt DXSTotalSamples;        // samples rendered by the audio callback so far
+#else
 static HANDLE DXSThread;
 static ULONG DXSThreadId;
 static sInt volatile DXSRun;
@@ -303,6 +326,7 @@ static CRITICAL_SECTION DXSLock;
 static HANDLE DXSEvent;
 
 unsigned long __stdcall ThreadCode(void *);
+#endif
 
 /****************************************************************************/
 /***                                                                      ***/
@@ -466,7 +490,9 @@ void __cdecl operator delete(void *p)
 	}
 }
 
+#if !sLINUX
 #define new new(__FILE__,__LINE__)
+#endif
 #endif
 
 #if sINTRO
@@ -771,6 +797,7 @@ sBool ConfigDialog(sInt nr,const sChar *title)
 }
 #endif
 
+#if !sLINUX
 static sBool MessagePump()
 {
   MSG msg;
@@ -796,8 +823,13 @@ static sBool MessagePump()
 /****************************************************************************/
 /****************************************************************************/
 
+#endif
+
 #if !sINTRO
 
+#if sLINUX
+#include "linux/start_sdl.inl"
+#else
 static void MakeCpuMask()
 {
   sU32 result;
@@ -1582,6 +1614,8 @@ sInt sSystem_::Msg(sU32 msg,sU32 wparam,sU32 lparam)
 
   return DefWindowProc(win,msg,wparam,lparam);
 }
+
+#endif
 
 void sSystem_::InitScreens()
 {
@@ -5389,12 +5423,16 @@ static sU64 GetPreciseTimer()
 
   if(SingleCore)
   {
+#if sLINUX
+    time = __builtin_ia32_rdtsc();
+#else
     __asm
     {
       rdtsc;
       mov   dword ptr [time], eax;
       mov   dword ptr [time+4], edx;
     }
+#endif
   }
   else
     QueryPerformanceCounter((LARGE_INTEGER *) &time);
@@ -5557,6 +5595,7 @@ void sSystem_::HideWinMouse(sBool hide)
 
 #pragma lekktor(off)
 
+#if !sLINUX
 static WAVEFORMATEX soundFormat = {
   WAVE_FORMAT_PCM,
   2,
@@ -5772,10 +5811,13 @@ unsigned long __stdcall ThreadCode(void *)
   return 0;
 }
 
+#endif // !sLINUX
+
 #pragma lekktor(on)
 
 #endif
 
+#if !sLINUX
 /****************************************************************************/
 /****************************************************************************/
 
@@ -5790,6 +5832,7 @@ extern void DSNullHandler(sS16 *data,sInt samples,void *user);
 
 /****************************************************************************/
 
+#if !sLINUX
 void sSystem_::SetSoundHandler(sSoundHandler hnd,sInt align,void *user)
 {
 #if sUSE_DIRECTSOUND
@@ -5844,6 +5887,8 @@ sInt sSystem_::GetCurrentSample()
   return 0;
 #endif
 }
+
+#endif // !sLINUX
 
 /****************************************************************************/
 /***                                                                      ***/
@@ -6681,6 +6726,8 @@ void sSystem_::FontEnd()
   DeleteObject(FontHBM);
 }
 
+#endif // !sLINUX
+
 /****************************************************************************/
 /****************************************************************************/
 /***                                                                      ***/
@@ -7006,6 +7053,7 @@ void sViewport::InitTexMS(sInt handle)
   sSystem->GetTextureSize(handle,Window.x1,Window.y1);
 }
 
+#if !sLINUX
 /****************************************************************************/
 /****************************************************************************/
 /***                                                                      ***/
@@ -7292,6 +7340,8 @@ sBool sHostFont::PrepareCheck(sInt xs,sInt ys,sChar *letters)
 //  sDPrintF("letter %d\n",letter);
   return result;
 }
+
+#endif // !sLINUX
 
 /****************************************************************************/
 

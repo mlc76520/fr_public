@@ -5,6 +5,9 @@
 
 #include "_types.hpp"
 #include "fried_internal.hpp"
+#if sLINUX
+#include "fried_mmx_linux.hpp"
+#endif
 
 namespace FRIED
 {
@@ -41,6 +44,9 @@ namespace FRIED
 
   static sInt imul14(sInt a,sInt b)
   {
+#if sLINUX
+    a = (sInt)((((sS64) a) * b + 8192) >> 14);
+#else
     __asm
     {
       mov   eax, [a];
@@ -51,6 +57,7 @@ namespace FRIED
 
       mov   [a], eax;
     }
+#endif
 
     return a;
   }
@@ -158,6 +165,32 @@ namespace FRIED
     }
   }
 
+#if sLINUX
+  // same results as the MMX loop: 16-bit products for groups of 8, the tail
+  // works on the 32-bit product (and shifts it logically in the >> case)
+  static void rescaleLoopMMX(sS16 *x,sInt count,sInt f,sInt shift)
+  {
+    sInt i,main = count & ~7;
+
+    if(shift >= 4)
+    {
+      shift -= 4;
+      for(i=0;i<main;i++)
+        x[i] = (sS16)(((sU16)(x[i] * f)) << shift);
+      for(;i<count;i++)
+        x[i] = (sS16)((x[i] * f) << shift);
+    }
+    else
+    {
+      shift = 4 - shift;
+      for(i=0;i<main;i++)
+        x[i] = (sS16)(((sS16)(x[i] * f)) >> shift);
+      for(;i<count;i++)
+        x[i] = (sS16)(((sU32)(x[i] * f)) >> shift);
+    }
+  }
+
+#else
   static void rescaleLoopMMX(sS16 *x,sInt count,sInt f,sInt shift)
   {
     if(shift >= 4)
@@ -269,6 +302,8 @@ namespace FRIED
       }
     }
   }
+
+#endif
 
   void newDequantize(sInt qs,sS16 *x,sInt npts,sInt cwidth)
   {

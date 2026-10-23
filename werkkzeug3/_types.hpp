@@ -81,7 +81,7 @@
 /****************************************************************************/
 
 //#if _DEBUG                          // fix memory management
-#if !sINTRO && sPLATFORM!=sPLAT_PDA
+#if !sINTRO && sPLATFORM!=sPLAT_PDA && !sLINUX
 #define _MFC_OVERRIDES_NEW
 void *  __cdecl operator new(unsigned int);
 void *  __cdecl operator new(unsigned int,const char *,int);
@@ -396,7 +396,52 @@ sInt sQuadraticRoots(const sF32 *coeffs,sF32 *roots);
 /***                                                                      ***/
 /****************************************************************************/
 
-#if !sMOBILE
+#if sLINUX
+
+// GCC versions of the x87/integer helpers below. The x87 control word is still
+// set like the original so libm behaves the same as under D3D9's FPU setup.
+
+__forceinline void sSetFPUControl(sU16 cw) { __asm__ volatile("fclex\n\tfldcw %0" : : "m"(cw)); }
+__forceinline void sFloatFix()    { sSetFPUControl(0x103f); } // round to nearest even + single precision
+__forceinline void sFloatDouble() { sSetFPUControl(0x123f); } // round to nearest even + double precision
+__forceinline void sFloatDen1()   { sSetFPUControl(0x141f); }
+__forceinline void sFloatDen0()   { sSetFPUControl(0x143f); }
+
+__forceinline sU16 sGetFPUControl() { sU16 cw; __asm__ volatile("fstcw %0" : "=m"(cw)); return cw; }
+
+// x87 conversions on purpose: they honour the rounding mode set by sSetFPUControl
+__forceinline sInt sFtol(const float f)   { sInt r; __asm__ ("fistpl %0" : "=m"(r) : "t"(f) : "st"); return r; }
+__forceinline sF32 sFRound(const float f) { sF32 r; __asm__ ("frndint" : "=t"(r) : "0"(f)); return r; }
+__forceinline void sFSinCos(const float x,sF32 &sine,sF32 &cosine) { sine = __builtin_sinf(x); cosine = __builtin_cosf(x); }
+
+__forceinline sInt sMulDiv(sInt var_a,sInt var_b,sInt var_c)
+{
+  return (sS32)( ((sS64)var_a)*((sS64)var_b)/var_c );
+}
+
+__forceinline sInt sMulShift(sInt var_a,sInt var_b)
+{
+  return (sS32)( ((sS64)var_a)*((sS64)var_b)>>16 );
+}
+
+__forceinline sInt sMulShift30(sInt var_a,sInt var_b)
+{
+  return (sS32)( ((sS64)var_a)*((sS64)var_b)>>30 );
+}
+
+__forceinline sInt sDivShift(sInt var_a,sInt var_b)
+{
+  return (sS32)( (((sS64)var_a)<<16)/((sS64)var_b) );
+}
+
+__forceinline sInt sDivShift30(sInt var_a,sInt var_b)
+{
+  return (sS32)( (((sS64)var_a)<<30)/((sS64)var_b) );
+}
+
+sBool sNormalFloat(sF32 value);
+
+#elif !sMOBILE
 
 #pragma warning (disable : 4035) 
 
@@ -1956,7 +2001,11 @@ class sTickTimer
   sU64 Total;
   sU64 LastStart;
 
+#if sLINUX
+  static sU64 Tick()                  { return __builtin_ia32_rdtsc(); }
+#else
   static sU64 Tick()                  { __asm { rdtsc } }
+#endif
 
 public:
   sTickTimer()                        { Reset(); }

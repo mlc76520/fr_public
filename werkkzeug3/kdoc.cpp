@@ -19,7 +19,9 @@ KOp *KOpCurrent = 0;
 #define sUSE_TIME_OF_YEAR 1
 #define sOP_PERFORMANCE 0
 
-#if sUSE_TIME_OF_YEAR
+#if sUSE_TIME_OF_YEAR && sLINUX
+#include <time.h>
+#elif sUSE_TIME_OF_YEAR
 struct SYSTEMTIME
 {
   sU16 wYear;
@@ -326,6 +328,30 @@ sInt KOp::Calc(KEnvironment *env,sInt flags)
 
 #pragma warning(disable : 4731)   // EPB CHANGED WARNING
 
+#if sLINUX
+// Copies the parameters to a 16-byte aligned block on the stack and calls the
+// (stdcall) handler. All parameters are 32-bit words, so this is the same
+// stack layout MSVC produced.
+static sInt CallCode(sInt code,sInt *para,sInt count)
+{
+  __asm__ volatile(
+    "movl %%esp, %%ebx\n\t"
+    "leal 0(,%%ecx,4), %%edx\n\t"
+    "subl %%edx, %%esp\n\t"
+    "andl $-16, %%esp\n\t"
+    "movl %%esp, %%edi\n\t"
+    "cld\n\t"
+    "rep movsl\n\t"
+    "call *%%eax\n\t"
+    "movl %%ebx, %%esp\n\t"
+    : "+a"(code), "+S"(para), "+c"(count)
+    :
+    : "ebx", "edx", "edi", "memory", "cc",
+      "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7");
+
+  return code;
+}
+#else
 static sInt CallCode(sInt code,sInt *para,sInt count)
 {
   sInt result;
@@ -352,6 +378,7 @@ static sInt CallCode(sInt code,sInt *para,sInt count)
 
   return result; 
 }
+#endif
 
 #pragma warning(default : 4731)
 
@@ -715,6 +742,19 @@ void KOp::ExecEvent(KEnvironment *kenv,KEvent *event,sBool)
 
   // time of year computation
 #if sUSE_TIME_OF_YEAR
+#if sLINUX
+  time_t now = ::time(0);
+  struct tm t;
+  gmtime_r(&now,&t);
+  t.tm_mon = 0;
+  t.tm_mday = 1;
+  t.tm_hour = t.tm_min = t.tm_sec = 0;
+  time_t startYear = timegm(&t);
+  t.tm_year++;
+  time_t endYear = timegm(&t);
+
+  kenv->Var[3].w = 1.0 * (now - startYear) / (endYear - startYear);
+#else
   SYSTEMTIME systemTime;
   sU64 timeYear,startYear,endYear;
 
@@ -731,6 +771,7 @@ void KOp::ExecEvent(KEnvironment *kenv,KEvent *event,sBool)
   SystemTimeToFileTime(&systemTime,(FILETIME *) &endYear);
 
   kenv->Var[3].w = 1.0 * (timeYear - startYear) / (endYear - startYear);
+#endif
 #endif
 
   if(event->Spline)                         // set spline

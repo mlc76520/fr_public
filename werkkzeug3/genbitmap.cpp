@@ -4,7 +4,9 @@
 #include "fried/fried.hpp"
 #include "mmintrin.h"
 #include "xmmintrin.h"
+#if !sLINUX
 #include "ivec.h"
+#endif
 
 #if sLINK_ENGINE
 #include "_start.hpp"
@@ -167,6 +169,9 @@ sU32 GetColor32(const sInt4 &colx)
   return col;
 }
 
+#if sLINUX
+#include "genbitmap_mmx_linux.hpp"
+#else
 void Fade64(sU64 &r,sU64 &c0,sU64 &c1,sInt fade)
 {
   static const sU64 xor0 = 0xffffffff00000000;
@@ -226,6 +231,8 @@ void AddScale64(sU64 &r,sU64 &c0,sU64 &c1,sInt fade)
   }
 }
 
+#endif
+
 void BilinearSetup(BilinearContext *ctx,sU64 *src,sInt w,sInt h,sInt b)
 {
   ctx->Src = src;
@@ -249,6 +256,7 @@ void PointFilter(BilinearContext *ctx,sU64 *r,sInt u,sInt v)
   *r = *(const sU64 *) ptr;
 }
 
+#if !sLINUX
 void BilinearFilter(BilinearContext *ctx,sU64 *r,sInt u,sInt v)
 {
   static const sU64 adjust = 0x8000800080008000;
@@ -441,6 +449,8 @@ ok4:
 #endif
 }
 
+#endif
+
 static sInt GammaTable[1025];
 
 static sInt GetGamma(sInt value)
@@ -496,6 +506,7 @@ GenBitmap * __stdcall Bitmap_RenderTarget(sInt xs,sInt ys,sU32 format)
 
 /****************************************************************************/
 
+#if !sLINUX
 void __stdcall Bitmap_Inner(sU64 *d,sU64 *s,sInt count,sInt mode,sU64 *x=0)
 {
   static const sU64 mask1 = 0x8000800080008000;
@@ -853,6 +864,8 @@ ende:
     emms
   }
 }
+
+#endif
 
 GenBitmap * __stdcall Bitmap_Merge(sInt mode,sInt count,GenBitmap *b0,...)
 {
@@ -1295,6 +1308,7 @@ GenBitmap * __stdcall Bitmap_Wavelet(GenBitmap *bm,sInt mode,sInt count)
 /***                                                                      ***/
 /****************************************************************************/
 
+#if !sLINUX
 static void BlurCore(sU16 *p,sU16 *q,sInt sizek,sInt xRes,sInt f0,sInt f1,sInt amp,sInt ampc)
 {
   __m64 f0f1,amplo,amphi,ampclip;
@@ -1442,6 +1456,8 @@ xmainloop:
   }
 }
 
+#endif
+
 // registers are tight here, we don't want a frame pointer
 #pragma optimize("y",on)
 
@@ -1558,7 +1574,7 @@ GenBitmap * __stdcall Bitmap_Blur(GenBitmap *bm,sInt flags,sF32 sx,sF32 sy,sF32 
   }
   while(repeat--);
   
-  __asm { emms };
+  _mm_empty();
   sVERIFY(qq!=(sU16 *)bm->Data);
   delete[] qq;
 
