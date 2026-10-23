@@ -30,6 +30,17 @@ struct Vec2
 	}
 };
 
+#if sLINUX
+__forceinline sInt sMulShift12(sInt var_a,sInt var_b)
+{
+  return (sInt)((((sS64) var_a) * var_b) >> 12);
+}
+
+__forceinline sInt sDivShift12(sInt var_a,sInt var_b)
+{
+  return (sInt)((((sS64) var_a) << 12) / var_b);
+}
+#else
 __forceinline sInt sMulShift12(sInt var_a,sInt var_b)
 {
   __asm
@@ -51,6 +62,7 @@ __forceinline sInt sDivShift12(sInt var_a,sInt var_b)
     idiv var_b
   }
 }
+#endif
 
 /****************************************************************************/
 

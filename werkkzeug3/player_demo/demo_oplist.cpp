@@ -22,7 +22,11 @@ KHandler KHandlers[] =
   // misc
 //  0x01, Init_Misc_Load,         Exec_Misc_Load,             // load
 //  0x02, Init_Misc_Nop,          Exec_Misc_Nop,              // store
+#if sLINUX // used by theta
+  0x03, Init_Misc_Nop,          Exec_Misc_Nop,              // nop
+#else
 //  0x03, Init_Misc_Nop,          Exec_Misc_Nop,              // nop
+#endif
 //  0x05, Init_Misc_Nop,          Exec_Misc_Time,             // time
   0x06, Init_Misc_Event,        Exec_Misc_Event,            // event
 //  0x07, Init_Misc_Trigger,      Exec_Misc_Trigger,          // trigger

@@ -245,6 +245,7 @@ static void ParseCommandLine(int argc,char **argv)
   }
 }
 
+#ifndef sLINUX_NO_MAIN                    // the .kx exporter has its own main()
 int main(int argc,char **argv)
 {
   ParseCommandLine(argc,argv);
@@ -259,6 +260,8 @@ int main(int argc,char **argv)
     fprintf(stderr,"SDL_Init failed: %s\n",SDL_GetError());
     return 1;
   }
+
+  setenv("DXVK_WSI_DRIVER","SDL2",0);      // DXVK-native renders into our SDL window
 
   sSystem = new sSystem_;
   sSetMem(sSystem,0,sizeof(sSystem_));
@@ -279,6 +282,8 @@ int main(int argc,char **argv)
 
   return 0;
 }
+
+#endif
 
 /****************************************************************************/
 
@@ -1011,4 +1016,83 @@ void sSystem_::FontEnd()
 {
   delete[] FontMem;
   FontMem = 0;
+}
+
+/****************************************************************************/
+/***                                                                      ***/
+/***   Screenshots for testing: THETA_SHOTS="t1,t2,..." (seconds of music)  ***/
+/***   writes shot_<t>.png into THETA_SHOTDIR (default: current dir)      ***/
+/***                                                                      ***/
+/****************************************************************************/
+
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "third_party/stb_image_write.h"
+
+static sF32 ShotTimes[256];
+static sInt ShotCount = -1;
+static sInt ShotNext;
+
+static int CompareF32(const void *a,const void *b)
+{
+  sF32 x = *(const sF32 *)a, y = *(const sF32 *)b;
+  return (x>y) - (x<y);
+}
+
+static void LinuxCaptureFrame(IDirect3DDevice9 *dev)
+{
+  if(ShotCount<0)
+  {
+    const char *env = getenv("THETA_SHOTS");
+    ShotCount = 0;
+    while(env && *env && ShotCount<256)
+    {
+      char *end;
+      ShotTimes[ShotCount++] = strtof(env,&end);
+      env = (*end==',') ? end+1 : 0;
+    }
+    qsort(ShotTimes,ShotCount,sizeof(sF32),CompareF32);
+  }
+  if(ShotNext>=ShotCount)
+    return;
+
+  sF32 t = sSystem->GetCurrentSample()/44100.0f;
+  if(t<ShotTimes[ShotNext])
+    return;
+  while(ShotNext<ShotCount && ShotTimes[ShotNext]<=t)
+    ShotNext++;
+
+  IDirect3DSurface9 *bb = 0,*sys = 0;
+  D3DSURFACE_DESC desc;
+  D3DLOCKED_RECT lr;
+
+  if(FAILED(dev->GetBackBuffer(0,0,D3DBACKBUFFER_TYPE_MONO,&bb)))
+    return;
+  bb->GetDesc(&desc);
+  if(SUCCEEDED(dev->CreateOffscreenPlainSurface(desc.Width,desc.Height,desc.Format,D3DPOOL_SYSTEMMEM,&sys,0))
+    && SUCCEEDED(dev->GetRenderTargetData(bb,sys))
+    && SUCCEEDED(sys->LockRect(&lr,0,D3DLOCK_READONLY)))
+  {
+    sU8 *rgb = new sU8[desc.Width*desc.Height*3];
+    for(sU32 y=0;y<desc.Height;y++)
+    {
+      const sU8 *s = (const sU8 *)lr.pBits + y*lr.Pitch;
+      sU8 *d = rgb + y*desc.Width*3;
+      for(sU32 x=0;x<desc.Width;x++,s+=4,d+=3)
+      {
+        d[0] = s[2];
+        d[1] = s[1];
+        d[2] = s[0];
+      }
+    }
+    sys->UnlockRect();
+
+    char name[1024];
+    const char *dir = getenv("THETA_SHOTDIR");
+    snprintf(name,sizeof(name),"%s/shot_%07.2f.png",dir ? dir : ".",t);
+    stbi_write_png(name,desc.Width,desc.Height,3,rgb,desc.Width*3);
+    fprintf(stderr,"screenshot %s\n",name);
+    delete[] rgb;
+  }
+  sRelease(sys);
+  sRelease(bb);
 }

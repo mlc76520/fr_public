@@ -6,7 +6,7 @@ DXVK  ?= $(HOME)/theta-port/dxvk-native32
 OUT   := build
 
 CXX      := g++
-BASEFLAGS := -m32 -O2 -g -MMD -MP -msse2 -mfpmath=sse -fpermissive -fno-strict-aliasing \
+BASEFLAGS := -m32 -O2 -g -MMD -MP -msse2 -mfpmath=sse -fpermissive -fno-strict-aliasing -fno-delete-null-pointer-checks -fwrapv \
             -fno-exceptions -w \
             -include compat.hpp \
             -I. -I$(SRC) -I$(SRC)/materials -I$(SRC)/werkkzeug3 -I$(SRC)/base -I$(OUT)/gen \
@@ -69,9 +69,54 @@ $(OUT)/tools/%.o: $(SRC)/%.cpp
 	@mkdir -p $(dir $@)
 	$(CXX) $(TOOLFLAGS) -c $< -o $@
 
+# .k -> .kx exporter: the editor's document model and operator table, no GUI
+# (the GUI objects the model talks to are stand-ins without vtables, hence the
+# non-virtual call patched into the extracted code)
+KEXPORT_SRCS := \
+  _types.cpp _intmath.cpp _ogg.cpp engine.cpp kdoc.cpp shadercodegen.cpp \
+  genbitmap.cpp genblobspline.cpp geneffect.cpp geneffectdebris.cpp \
+  geneffectex.cpp geneffectipp.cpp genmaterial.cpp genmesh.cpp genminmesh.cpp \
+  genoverlay.cpp genscene.cpp genvector.cpp gengeloet.cpp kkriegergame.cpp \
+  materials/material11.cpp materials/material20.cpp \
+  materials/materialdirect.cpp materials/rtmanager.cpp \
+  base/_rygdxt.cpp werkops.cpp linux/geneffectcubes_stub.cpp _util.cpp \
+  fried/decode.cpp fried/encode.cpp fried/entropy.cpp fried/pixel.cpp \
+  fried/quantize.cpp fried/transforms.cpp \
+  linux/kexport/werkdoc_model.cpp linux/kexport/winpara_headless.cpp \
+  shadercompile.cpp _wavefront.cpp _xsi.cpp _loader.cpp \
+  linux/kexport/kexport.cpp
+KEXPORT_OBJS := $(addprefix $(OUT)/kexport/,$(KEXPORT_SRCS:.cpp=.o)) $(OUT)/obj/_start_nomain.o
+KEXPORTFLAGS := $(BASEFLAGS) -include kexport/kexport_config.hpp -Ikexport -I$(OUT)/gen/kexport
+
+$(OUT)/gen/kexport/werkdoc_model.inc: $(SRC)/werkkzeug.cpp
+	@mkdir -p $(dir $@)
+	sed -n '/^\/\*\*\*   document  /,/^\/\*\*\*   File-Browser Support/p' $< | \
+	  sed 's/FindResultsWin->Clear()/FindResultsWin->WinFindResults::Clear()/g' > $@
+
+$(OUT)/gen/kexport/winpara_animops.inc: $(SRC)/winpara.cpp
+	@mkdir -p $(dir $@)
+	sed -n '/^const WerkOpAnimInfo AnimOpCmds\[\] = /,/^};/p' $< > $@
+
+$(OUT)/kexport/linux/kexport/werkdoc_model.o: $(OUT)/gen/kexport/werkdoc_model.inc
+$(OUT)/kexport/linux/kexport/winpara_headless.o: $(OUT)/gen/kexport/winpara_animops.inc
+
+$(OUT)/kexport/%.o: $(SRC)/%.cpp | shaders
+	@mkdir -p $(dir $@)
+	$(CXX) $(KEXPORTFLAGS) -c $< -o $@
+
+# the player's system layer, without its main()
+$(OUT)/obj/_start_nomain.o: $(SRC)/_start.cpp | shaders
+	@mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) -DsLINUX_NO_MAIN -c $< -o $@
+
+$(OUT)/kexport/kexport: $(KEXPORT_OBJS)
+	$(CXX) $(LDFLAGS) -o $@ $^ $(LIBS)
+
+kexport: $(OUT)/kexport/kexport
+
 clean:
 	rm -rf $(OUT)
 
 -include $(shell find $(OUT) -name '*.d' 2>/dev/null)
 
-.PHONY: all clean shaders
+.PHONY: all clean shaders kexport

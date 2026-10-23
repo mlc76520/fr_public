@@ -1755,17 +1755,17 @@ public:
 template <class Type> class sArray2 : public sArray<Type> // add support for sFORALL() and constructor/destructor to sArray 
 {
 public:
-  sArray2()                                 { Init(); }
-  ~sArray2()                                { Exit(); }
-  sArray2(const sArray2 &x)                 { Init(); Copy(x); }
-  sArray2 & operator= (const sArray2 &x)    { Copy(x); }
+  sArray2()                                 { this->Init(); }
+  ~sArray2()                                { this->Exit(); }
+  sArray2(const sArray2 &x)                 { this->Init(); this->Copy(x); }
+  sArray2 & operator= (const sArray2 &x)    { this->Copy(x); return *this; }
   Type *Add()                               { return sArray<Type>::Add(); }
   void Add(const Type &x)                   { *sArray<Type>::Add()=x; }
-  sInt GetCount() const                     { return Count; }
-  Type *GetFOR(sInt i)                      { return &Array[i]; }
-  const Type *GetFOR(sInt i) const          { return &Array[i]; }
-  void Swap(sInt i,sInt j)                  { sSwap(Array[i],Array[j]); }
-  void Clear()                              { Count = 0; }
+  sInt GetCount() const                     { return this->Count; }
+  Type *GetFOR(sInt i)                      { return &this->Array[i]; }
+  const Type *GetFOR(sInt i) const          { return &this->Array[i]; }
+  void Swap(sInt i,sInt j)                  { sSwap(this->Array[i],this->Array[j]); }
+  void Clear()                              { this->Count = 0; }
 };
 
 template <class Type> class sAutoArray       // Array of pointers, deleted when array gets deleted

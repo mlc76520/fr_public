@@ -2848,6 +2848,9 @@ void sSystem_::Render()
   }
 #endif
 
+#if sLINUX && !sINTRO
+  LinuxCaptureFrame(DXDev);
+#endif
   hr = DXDev->Present(0,0,0,0);
   if(hr==D3DERR_DEVICELOST)
     WDeviceLost = 1;
@@ -2860,6 +2863,11 @@ void sSystem_::Render()
 void sSystem_::SetGamma(sF32 gamma)
 { 
   D3DGAMMARAMP ramp;
+
+#if sLINUX
+  if(!DXDev)                              // the .kx exporter has no device
+    return;
+#endif
 
   sInt i;
   for(i=0;i<256;i++)
