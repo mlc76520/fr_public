@@ -970,46 +970,274 @@ sBool sSystem_::LoadBitmapCore(const sU8 *data,sInt size,sInt &xout,sInt &yout,s
 /***                                                                      ***/
 /****************************************************************************/
 
-// Text rendering went through GDI. Not available yet: the text is left blank.
+// GDI text output, rebuilt on stb_truetype with the GDI conventions the
+// generators rely on: the requested height is the em height, metrics come from
+// the OS/2 table like tmAscent/tmDescent, a non-zero width sets the average
+// character width, text is cp1252 (symbol fonts use their 0xf0xx range), the
+// y position is the top of the cell and advances are whole pixels.
+//
+// Fonts are looked up in <executable dir>/fonts/<name>.ttf (Windows file names
+// such as arial.ttf, arialbd.ttf, webdings.ttf), then through fontconfig.
 
-static sInt FontPageX,FontPageY,FontHeight;
+#define STB_TRUETYPE_IMPLEMENTATION
+#include "third_party/stb_truetype.h"
+
+struct LinuxFont
+{
+  sChar Name[64];
+  sInt Style;
+  sU8 *File;
+  stbtt_fontinfo Info;
+  sBool Symbol;
+  sInt WinAscent,WinDescent,AvgCharWidth;   // OS/2 table, font units
+};
+
+static LinuxFont Fonts[8];
+static LinuxFont *CurFont;
+static sF32 FontScaleX,FontScaleY;
+static sInt FontAscent;
+static sInt FontPageX,FontPageY;
+
+static const sU16 CP1252[32] =
+{
+  0x20ac,0x0081,0x201a,0x0192,0x201e,0x2026,0x2020,0x2021,0x02c6,0x2030,0x0160,0x2039,0x0152,0x008d,0x017d,0x008f,
+  0x0090,0x2018,0x2019,0x201c,0x201d,0x2022,0x2013,0x2014,0x02dc,0x2122,0x0161,0x203a,0x0153,0x009d,0x017e,0x0178,
+};
+
+static const sU8 *FindFontTable(const sU8 *ttf,const char *tag)
+{
+  sInt count = (ttf[4]<<8)|ttf[5];
+  for(sInt i=0;i<count;i++)
+  {
+    const sU8 *rec = ttf+12+16*i;
+    if(!memcmp(rec,tag,4))
+      return ttf + ((rec[8]<<24)|(rec[9]<<16)|(rec[10]<<8)|rec[11]);
+  }
+  return 0;
+}
+
+static sU8 *LoadFontFile(const sChar *name,sInt style,sChar *found,sInt foundsize)
+{
+  static const char *suffix[4] = { "","i","bd","bi" };
+  char lower[64],path[2048],dir[2048];
+  sU8 *data;
+  sInt size,i;
+
+  for(i=0;name[i] && i<63;i++)
+    lower[i] = (name[i]>='A' && name[i]<='Z') ? name[i]-'A'+'a' : name[i];
+  lower[i] = 0;
+
+  // next to the executable
+  sSystem->GetModuleBaseName(dir,sizeof(dir));
+  char *slash = strrchr(dir,'/');
+  if(slash) *slash = 0;
+  snprintf(path,sizeof(path),"%s/fonts/%s%s.ttf",dir,lower,suffix[style&3]);
+  sCopyString(found,path,foundsize);
+  if((data = sSystem->LoadFile(path,size)))
+    return data;
+  snprintf(path,sizeof(path),"%s/fonts/%s.ttf",dir,lower);
+  sCopyString(found,path,foundsize);
+  if((data = sSystem->LoadFile(path,size)))
+    return data;
+
+  // fontconfig
+  for(i=0;lower[i];i++)
+    if(!((lower[i]>='a' && lower[i]<='z') || (lower[i]>='0' && lower[i]<='9') || lower[i]==' ' || lower[i]=='-'))
+      lower[i] = ' ';
+  snprintf(path,sizeof(path),"fc-match -f '%%{file}' '%s:weight=%d:slant=%d' 2>/dev/null",
+    lower,(style&2) ? 200 : 80,(style&1) ? 100 : 0);
+  FILE *p = popen(path,"r");
+  if(!p)
+    return 0;
+  if(!fgets(path,sizeof(path),p))
+    path[0] = 0;
+  pclose(p);
+  sCopyString(found,path,foundsize);
+  return path[0] ? sSystem->LoadFile(path,size) : 0;
+}
+
+static LinuxFont *GetFont(const sChar *name,sInt style)
+{
+  sInt i;
+
+  for(i=0;i<8 && Fonts[i].File;i++)
+    if(Fonts[i].Style==style && !sCmpStringI(Fonts[i].Name,name))
+      return &Fonts[i];
+  if(i==8)
+    i = 7;
+
+  LinuxFont *f = &Fonts[i];
+  delete[] f->File;
+  sSetMem(f,0,sizeof(*f));
+  sCopyString(f->Name,name,sizeof(f->Name));
+  f->Style = style;
+  sChar found[2048];
+  f->File = LoadFontFile(name,style,found,sizeof(found));
+  if(!f->File || !stbtt_InitFont(&f->Info,f->File,stbtt_GetFontOffsetForIndex(f->File,0)))
+  {
+    fprintf(stderr,"warning: font '%s' not found\n",name);
+    delete[] f->File;
+    f->File = 0;
+    return 0;
+  }
+
+  f->Symbol = stbtt_FindGlyphIndex(&f->Info,'A')==0 && stbtt_FindGlyphIndex(&f->Info,0xf041)!=0;
+  fprintf(stderr,"font '%s': %s%s\n",name,found,f->Symbol ? " (symbol)" : "");
+
+  const sU8 *os2 = FindFontTable(f->File,"OS/2");
+  if(os2)
+  {
+    f->AvgCharWidth = (sS16)((os2[2]<<8)|os2[3]);
+    f->WinAscent = (os2[74]<<8)|os2[75];
+    f->WinDescent = (os2[76]<<8)|os2[77];
+  }
+  else
+  {
+    sInt asc,desc,gap;
+    stbtt_GetFontVMetrics(&f->Info,&asc,&desc,&gap);
+    f->WinAscent = asc;
+    f->WinDescent = -desc;
+  }
+
+  return f;
+}
+
+static sInt FontGlyph(sInt ch,sBool wide)
+{
+  sInt cp = ch;
+
+  if(!wide)
+  {
+    ch &= 255;
+    cp = (ch>=0x80 && ch<0xa0) ? CP1252[ch-0x80] : ch;
+  }
+  if(CurFont->Symbol)
+  {
+    sInt g = stbtt_FindGlyphIndex(&CurFont->Info,0xf000|(ch&0xff));
+    if(g)
+      return g;
+  }
+  return stbtt_FindGlyphIndex(&CurFont->Info,cp);
+}
+
+static sInt FontAdvance(sInt glyph)
+{
+  sInt adv,lsb;
+  stbtt_GetGlyphHMetrics(&CurFont->Info,glyph,&adv,&lsb);
+  return (sInt) floorf(adv*FontScaleX+0.5f);
+}
 
 sInt sSystem_::FontBegin(sInt pagex,sInt pagey,const sChar *name,sInt xs,sInt ys,sInt style)
 {
-  static sBool warned;
-  if(!warned)
-  {
-    fprintf(stderr,"warning: text rendering (font '%s') is not implemented on Linux\n",name);
-    warned = sTRUE;
-  }
-
   FontPageX = pagex;
   FontPageY = pagey;
-  FontHeight = ys ? ys : 16;
   FontMem = new sU32[pagex*pagey];
   sSetMem(FontMem,0,pagex*pagey*4);
 
-  return FontHeight;
+  if(name[0]==0) name = "arial";
+  CurFont = GetFont(name,style&3);
+  if(!CurFont)
+    return ys;
+
+  if(ys<=0) ys = 16;
+  FontScaleY = stbtt_ScaleForMappingEmToPixels(&CurFont->Info,ys);
+  FontScaleX = FontScaleY;
+  if(xs>0 && CurFont->AvgCharWidth>0)
+    FontScaleX = (sF32) xs / CurFont->AvgCharWidth;
+
+  FontAscent = (sInt) floorf(CurFont->WinAscent*FontScaleY+0.5f);
+  return FontAscent + (sInt) floorf(CurFont->WinDescent*FontScaleY+0.5f);
 }
 
 sInt sSystem_::FontWidth(const sChar *string,sInt len)
 {
-  return len*FontHeight/2;
+  sInt w = 0;
+
+  if(len==-1)
+    len = sGetStringLen(string);
+  if(CurFont)
+    for(sInt i=0;i<len;i++)
+      w += FontAdvance(FontGlyph(string[i],sFALSE));
+  return w;
 }
 
 void sSystem_::FontCharWidth(sInt ch,sInt *widths)
 {
-  widths[0] = 0;
-  widths[1] = FontHeight/2;
-  widths[2] = 0;
+  sInt x0,y0,x1,y1,glyph,adv;
+
+  widths[0] = widths[1] = widths[2] = 0;
+  if(!CurFont)
+    return;
+
+  glyph = FontGlyph(ch,sFALSE);
+  adv = FontAdvance(glyph);
+  stbtt_GetGlyphBitmapBox(&CurFont->Info,glyph,FontScaleX,FontScaleY,&x0,&y0,&x1,&y1);
+  if(x1<=x0)                              // blank glyph: all advance (GDI reports a 1 pixel black box)
+  {
+    x0 = 0;
+    x1 = sMax(adv,1);
+  }
+  widths[0] = x0;
+  widths[1] = x1-x0;
+  widths[2] = adv-x1;
+}
+
+static void FontDraw(sInt x,sInt y,sInt glyph)
+{
+  sInt x0,y0,x1,y1,w,h;
+
+  stbtt_GetGlyphBitmapBox(&CurFont->Info,glyph,FontScaleX,FontScaleY,&x0,&y0,&x1,&y1);
+  w = x1-x0;
+  h = y1-y0;
+  if(w<=0 || h<=0)
+    return;
+
+  sU8 *cov = new sU8[w*h];
+  stbtt_MakeGlyphBitmap(&CurFont->Info,cov,w,h,w,FontScaleX,FontScaleY,glyph);
+
+  for(sInt j=0;j<h;j++)
+  {
+    sInt py = y+FontAscent+y0+j;
+    if(py<0 || py>=FontPageY)
+      continue;
+    for(sInt i=0;i<w;i++)
+    {
+      sInt px = x+x0+i;
+      if(px<0 || px>=FontPageX)
+        continue;
+      sU32 &d = sSystem->FontMem[py*FontPageX+px];
+      sU32 c = cov[j*w+i];
+      if(c>(d&255))
+        d = c*0x010101;                   // white text (GDI: SetTextColor 0xffffff)
+    }
+  }
+  delete[] cov;
 }
 
 void sSystem_::FontPrint(sInt x,sInt y,const sChar *string,sInt len)
 {
+  if(len==-1)
+    len = sGetStringLen(string);
+  if(CurFont)
+    for(sInt i=0;i<len;i++)
+    {
+      sInt glyph = FontGlyph(string[i],sFALSE);
+      FontDraw(x,y,glyph);
+      x += FontAdvance(glyph);
+    }
 }
 
 void sSystem_::FontPrint(sInt x,sInt y,const sWChar *string,sInt len)
 {
+  if(len==-1)
+    for(len=0;string[len];len++);
+  if(CurFont)
+    for(sInt i=0;i<len;i++)
+    {
+      sInt glyph = FontGlyph(string[i],sTRUE);
+      FontDraw(x,y,glyph);
+      x += FontAdvance(glyph);
+    }
 }
 
 void sSystem_::FontEnd()

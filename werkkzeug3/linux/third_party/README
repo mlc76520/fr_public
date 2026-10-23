@@ -1,0 +1,8 @@
+Single-file libraries by Sean Barrett (public domain / MIT), from
+https://github.com/nothings/stb :
+
+  stb_image.h        image decoding (JPEG/PNG/...) in place of OleLoadPicture
+  stb_image_write.h  PNG screenshots (THETA_SHOTS)
+  stb_truetype.h     font rasterization in place of GDI text output;
+                     one local change: Microsoft "symbol" cmaps are accepted
+                     (for Webdings), marked "werkkzeug3 Linux port".

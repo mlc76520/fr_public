@@ -114,9 +114,27 @@ $(OUT)/kexport/kexport: $(KEXPORT_OBJS)
 
 kexport: $(OUT)/kexport/kexport
 
+# self-contained directory: player, DXVK, theta.kx, fonts
+DIST     ?= $(OUT)/dist
+THETA_K  := $(SRC)/data/theta/theta_final.k
+# webdings.ttf: Wine ships a free one (also inside Proton); WEBDINGS=path overrides
+WEBDINGS_DIRS := $(HOME)/.steam/steam/steamapps/common /games/SteamLibrary/steamapps/common \
+                 /usr/share/wine/fonts /usr/lib/wine /usr/lib64/wine
+
+dist: $(OUT)/theta $(OUT)/kexport/kexport
+	@mkdir -p $(DIST)/lib $(DIST)/fonts
+	cp $(OUT)/theta $(DIST)/theta
+	cp -L $(DXVK)/lib/libdxvk_d3d9.so.0 $(DIST)/lib/
+	$(OUT)/kexport/kexport $(THETA_K) $(DIST)/theta.kx > /dev/null
+	@w="$(WEBDINGS)"; [ -n "$$w" ] || w=$$(find $(WEBDINGS_DIRS) -name webdings.ttf -path '*wine/fonts*' 2>/dev/null | head -1); \
+	if [ -n "$$w" ]; then cp "$$w" $(DIST)/fonts/webdings.ttf && echo "fonts: $$w"; \
+	else echo "note: no webdings.ttf found (one symbol will be missing)"; fi
+	cp README.md $(SRC)/data/theta/readme.txt $(SRC)/data/theta/LICENSE $(DIST)/ 2>/dev/null || true
+	@echo "-> $(DIST)/theta"
+
 clean:
 	rm -rf $(OUT)
 
 -include $(shell find $(OUT) -name '*.d' 2>/dev/null)
 
-.PHONY: all clean shaders kexport
+.PHONY: all clean shaders kexport dist
