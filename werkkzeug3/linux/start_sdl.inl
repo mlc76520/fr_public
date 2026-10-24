@@ -198,6 +198,7 @@ static sInt LinuxConfigX = 1280;
 static sInt LinuxConfigY = 720;
 sF32 LinuxPictureAspect = 21.0f/9.0f;
 sBool LinuxStretch = sFALSE;
+sF32 LinuxViewAspect = 16.0f/9.0f;         // shape whose vertical field of view is kept
 sF32 LinuxViewZoomX = 1.0f;               // set by DetermineTargetViewport()
 
 static void Usage(const char *exe)
@@ -207,10 +208,12 @@ static void Usage(const char *exe)
     "  -w, --window        run in a window (default: fullscreen)\n"
     "  -s, --size WxH      window size (default: 1280x720)\n"
     "      --aspect W:H    shape of the picture area (default 21:9; 'fill' uses\n"
-    "                      the whole screen, 2:1 is the shape it was made for)\n"
-    "      --stretch       stretch the 2:1 picture to that shape instead of\n"
-    "                      showing more on the sides (--aspect 5:3 --stretch\n"
-    "                      looks like the original 800x600 player under Wine)\n"
+    "                      the whole screen)\n"
+    "      --view W:H      field of view: the vertical one of a W:H picture\n"
+    "                      (default 16:9; 2:1 is the 2007 player, 4:3 the 2004 one;\n"
+    "                      --aspect 4:3 --view 4:3 looks like the original)\n"
+    "      --stretch       stretch the --view picture to the --aspect shape\n"
+    "                      instead of showing more on the sides\n"
     "  -l, --loop          loop the demo\n"
     "      --no-vsync      don't wait for vertical sync\n"
     "  -h, --help          show this help\n"
@@ -248,6 +251,16 @@ static void ParseCommandLine(int argc,char **argv)
         exit(1);
       }
       LinuxPictureAspect = (sF32) aw / ah;
+    }
+    else if(!strcmp(a,"--view") && i+1<argc)
+    {
+      sInt aw,ah;
+      if(sscanf(argv[++i],"%d:%d",&aw,&ah)!=2 || aw<=0 || ah<=0)
+      {
+        Usage(argv[0]);
+        exit(1);
+      }
+      LinuxViewAspect = (sF32) aw / ah;
     }
     else if(!strcmp(a,"--stretch"))
       LinuxStretch = sTRUE;

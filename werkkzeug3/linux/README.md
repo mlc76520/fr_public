@@ -13,17 +13,19 @@ input and sound by SDL2, music by libvorbis.
     -s, --size WxH      window size (default: 1280x720)
         --aspect W:H    shape of the picture area (default 21:9; `fill` uses
                         the whole screen)
-        --stretch       stretch the 2:1 picture instead of widening the view
+        --view W:H      field of view: the vertical one of a W:H picture
+                        (default 16:9; 2:1 is the 2007 player, 4:3 the 2004 one)
+        --stretch       stretch the --view picture instead of widening it
     -l, --loop          loop the demo
         --no-vsync      don't wait for vertical sync
 
-Esc quits, F11 toggles fullscreen. The demo was made for a 2:1 picture; a
-wider one keeps its vertical field of view and shows more on the sides (a
+Esc quits, F11 toggles fullscreen. The picture keeps the vertical field of
+view of a `--view` shaped one and shows more on the sides when it is wider (a
 shape within 3% of the screen's fills it, so 21:9 covers a 3440x1440 screen).
-`--aspect 2:1` gives the intended framing. The original player stretched the
-2:1 projection to the monitor shape picked in its setup dialog, so 800x600 shown
-in 4:3 (e.g. under Wine) gave a 5:3 picture, 20% taller: `--aspect 5:3
---stretch` reproduces that look. Without a file name, `theta.kx` next to the
+theta (2004) was made for a player projecting for 4:3; the 2007 player in
+this repository projects for 2:1; 16:9 is in between and avoids showing the
+unlit edges of the scenes on wide screens. `--aspect 4:3 --view 4:3` looks
+like the original 800x600 player under Wine. Without a file name, `theta.kx` next to the
 executable is used. Fonts are taken from `fonts/` next to the executable
 (Windows names: `arial.ttf`, `webdings.ttf`), then from fontconfig.
 
@@ -65,6 +67,9 @@ Engine fixes needed by theta (2004 content on the 2007 engine):
 `GENOVER_RTSIZES` (the image post-processing render targets, disabled in
 player builds as a "hack for debris") is enabled again, and effects (particles)
 are sorted after the light/post-light phases like other single-pass jobs.
+Views rendered into textures (the far end of the tunnels, the spider's eyes)
+keep the 4:3 projection: the textures are shown on 4:3 quads, the 2:1 one
+squeezed them and the tunnels' nested far ends drifted into steps.
 The "full size" post-processing render targets are as large as the screen
 instead of 1024x512 (most scenes are rendered into them, so above 1024 pixels
 the picture was upscaled and edges turned into steps); blur offsets on them

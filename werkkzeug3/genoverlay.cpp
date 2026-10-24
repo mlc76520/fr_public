@@ -39,6 +39,7 @@ extern "C" void __stdcall wsprintfA(sChar *str,const sChar *format,...);
 
 #if sLINUX
 void sLinuxFullRTSize(sInt &xs,sInt &ys);  // start_sdl.inl
+static sInt LinuxRenderTargetDepth;       // inside Exec_IPP_RenderTarget
 #endif
 
 static const sU32 EffectJPEGStates[] = {
@@ -1090,12 +1091,24 @@ void __stdcall Exec_IPP_Viewport(KOp *parent,KEnvironment *kenv,sInt size,sInt f
 
       if(!(flags & 0x1000))
       {
-        env.ZoomY *= kenv->Aspect;
 #if sLINUX
-        // picture wider than the 2:1 it was made for: same vertical field
-        // of view, more on the sides (instead of stretching the picture)
-        extern sF32 LinuxViewZoomX;
-        env.ZoomX *= LinuxViewZoomX;
+        if(LinuxRenderTargetDepth)
+        {
+          // rendered into a texture: theta (2004) was made for a player
+          // projecting for 4:3, and shows these textures on 4:3 quads
+          // (e.g. the far end of the tunnels), so keep that projection.
+          env.ZoomY *= 4.0f/3.0f;
+        }
+        else
+        {
+          // picture wider than the --view shape it is projected for: same
+          // vertical field of view, more on the sides (not stretched)
+          extern sF32 LinuxViewZoomX;
+          env.ZoomY *= kenv->Aspect;
+          env.ZoomX *= LinuxViewZoomX;
+        }
+#else
+        env.ZoomY *= kenv->Aspect;
 #endif
       }
 
@@ -1663,7 +1676,13 @@ void __stdcall Exec_IPP_RenderTarget(KOp *op,KEnvironment *kenv)
     GenOverlayManager->SetMasterViewport(newvp);
 
     // render
+#if sLINUX
+    LinuxRenderTargetDepth++;
     op->ExecInputs(kenv);
+    LinuxRenderTargetDepth--;
+#else
+    op->ExecInputs(kenv);
+#endif
 
     // if the current output is not our rendertarget, we need to do a copy
     if(GenOverlayManager->LastOutput)

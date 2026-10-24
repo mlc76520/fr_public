@@ -237,8 +237,9 @@ static void DetermineTargetViewport(sViewport &vp)
   vp.Window.y1 = (r.YSize() + targetHeight) / 2;
 #if sLINUX
   extern sF32 LinuxViewZoomX;
+  extern sF32 LinuxViewAspect;
   extern sBool LinuxStretch;
-  LinuxViewZoomX = LinuxStretch ? 1.0f : 2.0f * targetHeight / targetWidth;
+  LinuxViewZoomX = LinuxStretch ? 1.0f : LinuxViewAspect * targetHeight / targetWidth;
 #endif
 #else
   vp.Window.Init(0,sSystem->ConfigY*1/6,sSystem->ConfigX,sSystem->ConfigY*5/6);
@@ -557,7 +558,12 @@ sBool sAppHandler(sInt code,sDInt value)
     
 
     //Environment->Aspect =  1.0f*vp.Window.XSize()/vp.Window.YSize();
+#if sLINUX
+    extern sF32 LinuxViewAspect;
+    Environment->Aspect = LinuxViewAspect;
+#else
     Environment->Aspect = 2.0f;
+#endif
     //Environment->Aspect = 4.0f / 3.0f;
 
     root = Document->RootOps[Document->CurrentRoot];
