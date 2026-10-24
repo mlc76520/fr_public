@@ -11,14 +11,19 @@ input and sound by SDL2, music by libvorbis.
 
     -w, --window        run in a window (default: fullscreen)
     -s, --size WxH      window size (default: 1280x720)
-        --aspect W:H    shape of the picture area (default 2:1)
+        --aspect W:H    shape of the picture area (default 21:9; `fill` uses
+                        the whole screen)
+        --stretch       stretch the 2:1 picture instead of widening the view
     -l, --loop          loop the demo
         --no-vsync      don't wait for vertical sync
 
-Esc quits, F11 toggles fullscreen. The demo is projected for a 2:1 picture;
-the original player assumed the monitor shape picked in its setup dialog, so
-800x600 shown in 4:3 (e.g. under Wine) gave a 5:3 picture, 20% taller:
-`--aspect 5:3` reproduces that look. Without a file name, `theta.kx` next to the
+Esc quits, F11 toggles fullscreen. The demo was made for a 2:1 picture; a
+wider one keeps its vertical field of view and shows more on the sides (a
+shape within 3% of the screen's fills it, so 21:9 covers a 3440x1440 screen).
+`--aspect 2:1` gives the intended framing. The original player stretched the
+2:1 projection to the monitor shape picked in its setup dialog, so 800x600 shown
+in 4:3 (e.g. under Wine) gave a 5:3 picture, 20% taller: `--aspect 5:3
+--stretch` reproduces that look. Without a file name, `theta.kx` next to the
 executable is used. Fonts are taken from `fonts/` next to the executable
 (Windows names: `arial.ttf`, `webdings.ttf`), then from fontconfig.
 
@@ -60,10 +65,15 @@ Engine fixes needed by theta (2004 content on the 2007 engine):
 `GENOVER_RTSIZES` (the image post-processing render targets, disabled in
 player builds as a "hack for debris") is enabled again, and effects (particles)
 are sorted after the light/post-light phases like other single-pass jobs.
+The "full size" post-processing render targets are as large as the screen
+instead of 1024x512 (most scenes are rendered into them, so above 1024 pixels
+the picture was upscaled and edges turned into steps); blur offsets on them
+are scaled so effects keep their size on screen.
 
 Testing aids (environment variables):
 `THETA_SHOTS=5,30,60 THETA_SHOTDIR=dir` writes PNG screenshots at the given
-music times (seconds), `THETA_FPS=n` caps the frame rate, `THETA_DUMPTEX=dir`
+music times (seconds), `THETA_START=t` starts the music (and the demo) at t
+seconds, `THETA_FPS=n` caps the frame rate, `THETA_DUMPTEX=dir`
 and `THETA_DUMPSHADERS=dir` write the generated textures and shaders.
 `kexport --dump ops.txt` lists operators, parameters and timeline events,
 `--disable-event name` leaves an event out of the export.

@@ -37,6 +37,10 @@ extern "C" void __stdcall wsprintfA(sChar *str,const sChar *format,...);
 #include "effect_jpegps.hpp"
 #include "effect_jpegvs.hpp"
 
+#if sLINUX
+void sLinuxFullRTSize(sInt &xs,sInt &ys);  // start_sdl.inl
+#endif
+
 static const sU32 EffectJPEGStates[] = {
   sD3DRS_ALPHATESTENABLE,               0,
   sD3DRS_ZENABLE,                       sD3DZB_TRUE,
@@ -459,6 +463,19 @@ GenOverlayManagerClass::GenOverlayManagerClass()
     {
 #if !sPLAYER
       rtd->Bitmap = Bitmap_RenderTarget(sizes[i][0]-si.LowQuality,sizes[i][1]-si.LowQuality,si.ShaderLevel>=sPS_20 ? sizes[i][2] : sTF_A8R8G8B8);
+#elif sLINUX
+      if(i == GENOVER_RTSIZES - 1)        // full size: as large as the screen, not 1024x512
+      {
+        sInt xs,ys;
+        sLinuxFullRTSize(xs,ys);
+        rtd->Bitmap = new GenBitmap;
+        rtd->Bitmap->Format = sTF_A8R8G8B8;
+        rtd->Bitmap->XSize = xs;
+        rtd->Bitmap->YSize = ys;
+        rtd->Bitmap->Texture = sSystem->AddTexture(xs,ys,sTF_A8R8G8B8,0);
+      }
+      else
+        rtd->Bitmap = Bitmap_RenderTarget(sizes[i][0],sizes[i][1],CurrentShader>=sPS_20 ? sizes[i][2] : sTF_A8R8G8B8);
 #else
       rtd->Bitmap = Bitmap_RenderTarget(sizes[i][0],sizes[i][1],CurrentShader>=sPS_20 ? sizes[i][2] : sTF_A8R8G8B8);
 #endif
@@ -641,8 +658,8 @@ void GenOverlayManagerClass::PrepareViewport(GenOverlayRT *rt,sViewport &vp)
     if(rt->Size == GENOVER_RTSIZES - 1) // full size rendertarget?
     {
       // yes, use 1:1 pixel mapping window
-      vp.Window.x1 = sMin(Master.Window.XSize(),1024);
-      vp.Window.y1 = sMin(Master.Window.YSize(),512);
+      vp.Window.x1 = sMin(Master.Window.XSize(),rt->Bitmap->XSize);
+      vp.Window.y1 = sMin(Master.Window.YSize(),rt->Bitmap->YSize);
     }
   }
   else
@@ -654,15 +671,12 @@ void GenOverlayManagerClass::SetMasterViewport(sViewport &vp)
   Master = vp;
 
   // recompute scale for full-size rendertargets
-  sF32 scaleu = sMin(1.0f * vp.Window.XSize() / 1024,1.0f);
-  sF32 scalev = sMin(1.0f * vp.Window.YSize() / 512,1.0f);
-
   for(sInt i=0;i<GENOVER_RTCOUNT;i++)
   {
     if(RT[i].Size == GENOVER_RTSIZES - 1) // full size rendertarget?
     {
-      RT[i].ScaleUV[0] = scaleu;
-      RT[i].ScaleUV[1] = scalev;
+      RT[i].ScaleUV[0] = sMin(1.0f * vp.Window.XSize() / RT[i].Bitmap->XSize,1.0f);
+      RT[i].ScaleUV[1] = sMin(1.0f * vp.Window.YSize() / RT[i].Bitmap->YSize,1.0f);
     }
   }
 }
@@ -777,6 +791,16 @@ void GenOverlayManagerClass::Blend4x(GenOverlayRT *in,GenOverlayRT *out,sFRect *
 
   if(cmode)
   {
+#if sLINUX
+    // offsets are in pixels of the input. full-size rendertargets used to be
+    // at most 1024 pixels wide; keep the effect the same size on screen.
+    if(in->Size == GENOVER_RTSIZES - 1)
+    {
+      sF32 f = sMax(in->ScaleUV[0] * in->Bitmap->XSize / 1024.0f,1.0f);
+      for(i=0;i<16;i++)
+        (&rect[0].x0)[i] *= f;
+    }
+#endif
     for(i=0;i<8;i++)
     {
       (&rect[0].x0)[i*2] = (&rect[0].x0)[i*2] / in->Bitmap->XSize + (i&1);
@@ -1065,7 +1089,15 @@ void __stdcall Exec_IPP_Viewport(KOp *parent,KEnvironment *kenv,sInt size,sInt f
       env.FogEnd = fogend;
 
       if(!(flags & 0x1000))
+      {
         env.ZoomY *= kenv->Aspect;
+#if sLINUX
+        // picture wider than the 2:1 it was made for: same vertical field
+        // of view, more on the sides (instead of stretching the picture)
+        extern sF32 LinuxViewZoomX;
+        env.ZoomX *= LinuxViewZoomX;
+#endif
+      }
 
       KOp *spo = parent->GetInput(1);
       if(spo)

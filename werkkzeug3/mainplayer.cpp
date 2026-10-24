@@ -213,9 +213,14 @@ static void DetermineTargetViewport(sViewport &vp)
   //sInt targetHeight = 3 * AspectRatioList[IntroTargetAspect][0] * r.YSize() / (4 * AspectRatioList[IntroTargetAspect][1]);
 #if sLINUX
   // the picture is projected for 2:1; LinuxPictureAspect is the shape of the
-  // area it is shown in (2:1 by default, square pixels; --aspect changes it)
+  // area it is shown in (--aspect, 0 = the whole window). a shape within 3%
+  // of the window's fills it.
   extern sF32 LinuxPictureAspect;
-  sInt targetHeight = sInt(r.XSize() / LinuxPictureAspect);
+  sF32 aspect = LinuxPictureAspect;
+  sF32 window = 1.0f * r.XSize() / r.YSize();
+  if(aspect<=0 || sFAbs(aspect/window-1.0f)<0.03f)
+    aspect = window;
+  sInt targetHeight = sInt(r.XSize() / aspect);
 #else
   sInt targetHeight = AspectRatioList[IntroTargetAspect][0] * r.YSize() / (2 * AspectRatioList[IntroTargetAspect][1]);
 #endif
@@ -230,6 +235,11 @@ static void DetermineTargetViewport(sViewport &vp)
   vp.Window.x1 = (r.XSize() + targetWidth) / 2;
   vp.Window.y0 = (r.YSize() - targetHeight) / 2;
   vp.Window.y1 = (r.YSize() + targetHeight) / 2;
+#if sLINUX
+  extern sF32 LinuxViewZoomX;
+  extern sBool LinuxStretch;
+  LinuxViewZoomX = LinuxStretch ? 1.0f : 2.0f * targetHeight / targetWidth;
+#endif
 #else
   vp.Window.Init(0,sSystem->ConfigY*1/6,sSystem->ConfigX,sSystem->ConfigY*5/6);
 #endif

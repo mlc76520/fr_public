@@ -196,7 +196,9 @@ static sChar LinuxCmdLine[2048];
 static sU32 LinuxConfigFlags = sSF_DIRECT3D|sSF_FULLSCREEN|sSF_WAITVSYNC;
 static sInt LinuxConfigX = 1280;
 static sInt LinuxConfigY = 720;
-sF32 LinuxPictureAspect = 2.0f;
+sF32 LinuxPictureAspect = 21.0f/9.0f;
+sBool LinuxStretch = sFALSE;
+sF32 LinuxViewZoomX = 1.0f;               // set by DetermineTargetViewport()
 
 static void Usage(const char *exe)
 {
@@ -204,8 +206,11 @@ static void Usage(const char *exe)
     "usage: %s [options] [file.kx]\n"
     "  -w, --window        run in a window (default: fullscreen)\n"
     "  -s, --size WxH      window size (default: 1280x720)\n"
-    "      --aspect W:H    shape of the picture area (default 2:1; 5:3 looks like\n"
-    "                      the original 800x600 player under Wine)\n"
+    "      --aspect W:H    shape of the picture area (default 21:9; 'fill' uses\n"
+    "                      the whole screen, 2:1 is the shape it was made for)\n"
+    "      --stretch       stretch the 2:1 picture to that shape instead of\n"
+    "                      showing more on the sides (--aspect 5:3 --stretch\n"
+    "                      looks like the original 800x600 player under Wine)\n"
     "  -l, --loop          loop the demo\n"
     "      --no-vsync      don't wait for vertical sync\n"
     "  -h, --help          show this help\n"
@@ -229,6 +234,11 @@ static void ParseCommandLine(int argc,char **argv)
         exit(1);
       }
     }
+    else if(!strcmp(a,"--aspect") && i+1<argc && !strcmp(argv[i+1],"fill"))
+    {
+      LinuxPictureAspect = 0;
+      i++;
+    }
     else if(!strcmp(a,"--aspect") && i+1<argc)
     {
       sInt aw,ah;
@@ -239,6 +249,8 @@ static void ParseCommandLine(int argc,char **argv)
       }
       LinuxPictureAspect = (sF32) aw / ah;
     }
+    else if(!strcmp(a,"--stretch"))
+      LinuxStretch = sTRUE;
     else if(!strcmp(a,"-l") || !strcmp(a,"--loop"))
       IntroLoop = 1;
     else if(!strcmp(a,"--no-vsync"))
@@ -344,6 +356,28 @@ static sU32 TranslateKey(const SDL_Keysym &ks)
 static sBool IsFullscreen()
 {
   return SDLWindow && (SDL_GetWindowFlags(SDLWindow) & SDL_WINDOW_FULLSCREEN_DESKTOP)==SDL_WINDOW_FULLSCREEN_DESKTOP;
+}
+
+// size of the "full size" IPP rendertargets: the largest the window can get
+// (the original used 1024x512 and showed it 1:1 up to that size)
+void sLinuxFullRTSize(sInt &xs,sInt &ys)
+{
+  SDL_DisplayMode mode;
+  int w,h;
+
+  xs = 1024;
+  ys = 512;
+  if(SDLWindow && SDL_GetDesktopDisplayMode(sMax(SDL_GetWindowDisplayIndex(SDLWindow),0),&mode)==0)
+  {
+    xs = sMax<sInt>(xs,mode.w);
+    ys = sMax<sInt>(ys,mode.h);
+  }
+  if(SDLWindow)
+  {
+    SDL_GetWindowSize(SDLWindow,&w,&h);
+    xs = sMax<sInt>(xs,w);
+    ys = sMax<sInt>(ys,h);
+  }
 }
 
 static void ToggleFullscreen()
@@ -735,6 +769,25 @@ void sSystem_::SetSoundHandler(sSoundHandler hnd,sInt align,void *user)
   DXSLastTotalSample = 0;
   DXSTotalSamples = 0;
   DXSTime = timeGetTime();
+
+  // testing aid: THETA_START=<seconds> starts the music (and so the demo)
+  // later, by decoding and dropping the samples before it. first song only.
+  static sBool started = sFALSE;
+  const char *start = getenv("THETA_START");
+  if(hnd && start && !started)
+  {
+    static sS16 skip[4096*2];
+    sInt left = sInt(atof(start)*44100) & ~(DXSHandlerAlign-1);
+    DXSTotalSamples = DXSLastTotalSample = left;
+    while(left>0)
+    {
+      sInt n = sMin<sInt>(left,4096);
+      (*hnd)(skip,n,user);
+      left -= n;
+    }
+  }
+  if(hnd)
+    started = sTRUE;
 
   SDL_UnlockAudioDevice(DXSDevice);
 }
