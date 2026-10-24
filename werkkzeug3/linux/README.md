@@ -39,6 +39,11 @@ SDL2 backend (`DXVK=...`, default `~/theta-port/dxvk-native32`).
     make            # build/theta, the player
     make kexport    # build/kexport/kexport, the .k -> .kx exporter
     make dist       # build/dist: player + DXVK + theta.kx + fonts
+    make appimage   # build/theta-i686.AppImage (APPIMAGETOOL=path/to/appimagetool)
+
+The AppImage bundles DXVK, SDL2/SDL3 and Vorbis (32-bit); the system still
+needs 32-bit glibc (2.43 or later when built on Fedora 44), libstdc++, a 32-bit
+Vulkan driver and X11/Wayland libraries, like 32-bit Steam games.
 
 `kexport input.k output.kx [--song file.ogg]` does what "File/Export" did in
 the Windows editor: it compiles the editor's document model and operator

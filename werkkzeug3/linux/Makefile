@@ -132,9 +132,33 @@ dist: $(OUT)/theta $(OUT)/kexport/kexport
 	cp README.md $(SRC)/data/theta/readme.txt $(SRC)/data/theta/LICENSE $(DIST)/ 2>/dev/null || true
 	@echo "-> $(DIST)/theta"
 
+# AppImage: the dist directory plus the 32-bit libraries distributions often
+# lack. Needs appimagetool (APPIMAGETOOL=path); the host still needs 32-bit
+# glibc, libstdc++, a Vulkan driver and X11/Wayland libraries (as for Steam).
+APPDIR       := $(OUT)/AppDir
+APPIMAGETOOL ?= appimagetool
+APPLIBS      := libSDL2-2.0.so.0 libSDL3.so.0 libvorbis.so.0 libvorbisfile.so.3 libogg.so.0
+APPLIBDIR    ?= /usr/lib
+
+appimage:
+	rm -rf $(APPDIR)
+	$(MAKE) dist DIST=$(APPDIR)/usr/bin
+	for l in $(APPLIBS); do cp -L $(APPLIBDIR)/$$l $(APPDIR)/usr/bin/lib/ || exit 1; done
+	printf '%s\n' '#!/bin/sh' 'HERE="$$(dirname "$$(readlink -f "$$0")")"' \
+	  'export LD_LIBRARY_PATH="$$HERE/usr/bin/lib$${LD_LIBRARY_PATH:+:$$LD_LIBRARY_PATH}"' \
+	  'export DXVK_LOG_PATH="$${DXVK_LOG_PATH:-none}"' \
+	  'exec "$$HERE/usr/bin/theta" "$$@"' > $(APPDIR)/AppRun
+	chmod +x $(APPDIR)/AppRun
+	printf '%s\n' '[Desktop Entry]' 'Type=Application' 'Name=fr-038: theta' \
+	  'Comment=farbrausch demo (The Ultimate Meeting 2004), native Linux port' \
+	  'Exec=theta' 'Icon=theta' 'Categories=AudioVideo;' 'Terminal=false' > $(APPDIR)/theta.desktop
+	cp theta.png $(APPDIR)/theta.png
+	ln -sf theta.png $(APPDIR)/.DirIcon
+	$(APPIMAGETOOL) $(APPDIR) $(OUT)/theta-i686.AppImage
+
 clean:
 	rm -rf $(OUT)
 
 -include $(shell find $(OUT) -name '*.d' 2>/dev/null)
 
-.PHONY: all clean shaders kexport dist
+.PHONY: all clean shaders kexport dist appimage
